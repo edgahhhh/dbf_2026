@@ -1,3 +1,7 @@
+# non-binary folders
+ppts/
+docs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
