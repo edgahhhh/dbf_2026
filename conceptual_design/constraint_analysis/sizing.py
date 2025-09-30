@@ -32,9 +32,13 @@ class aircraft():
 
         # Course parameters, generally won't change
         self.ground_run = course_parameters['ground run']
-        self.phi = aircraft_design_parameters['turning bank angle']
+        self.phi_m2 = aircraft_design_parameters['m2 bank angle']
+        self.phi_m3 = aircraft_design_parameters['m3 bank angle']
         self.time_limit = course_parameters['time limit']
         self.length_straight = course_parameters['length of straights']
+
+        self.n_m2 = 1/np.cos(self.phi_m2)  # load factor during m2 turns
+        self.n_m3 = 1/np.cos(self.phi_m3)  # load factor during m3 turns
 
         # Initial mass build up
         self.mass_fuselage = 0.0
@@ -145,7 +149,6 @@ class aircraft():
         self.E_m2_cruise = 0.0
         self.L_m2_turn = 0.0    # use load factor instead
         self.laps_m2 = 0.0
-        self.n_turn = 0.0
         self.mission_two_score = 0.0
 
         # Mission Three Performance
@@ -268,13 +271,13 @@ class aircraft():
         available_power = thrust * np.sqrt(2*wing_loading/self.rho/self.CLmax)/np.sqrt(2)
         return available_power  # Watts, if everything is in SI
     
-    def calculate_power_needed_for_level_turn(self, mass, airspeed, CDmin, gravity=9.81):
-        """ calculate available power needed to complete a level turn at some angle and airspeed """
-        wing_loading = mass*gravity/self.S
-        load_factor = 1/np.cos(self.phi)
-        p_dynamic = 1/2*self.rho*airspeed**2
-        thrust = p_dynamic*self.S*(CDmin + self.k*(load_factor*wing_loading/p_dynamic)**(2))
-        return(thrust*airspeed)
+    # def calculate_power_needed_for_level_turn(self, mass, airspeed, CDmin, load_factor, gravity=9.81):
+    #     """ calculate available power needed to complete a level turn at some angle and airspeed """
+    #     wing_loading = mass*gravity/self.S
+    #     load_factor = 1/load_factor
+    #     p_dynamic = 1/2*self.rho*airspeed**2
+    #     thrust = p_dynamic*self.S*(CDmin + self.k*(load_factor*wing_loading/p_dynamic)**(2))
+    #     return(thrust*airspeed)
 
     def calculate_power_needed_for_cruise(self, mass, airspeed, CD_cruise, CDmin, gravity=9.81):
         """ calculate available power needed to cruise at steady state (ignore trim drag) """
@@ -284,31 +287,33 @@ class aircraft():
 
         return(thrust*airspeed)
 
-    def calculate_cruise_performance(self, level_power_batt, turn_power_batt, mass, cruise_speed, time_tof, time_climb, gravity=9.81):
+    def calculate_cruise_performance(self, level_power_batt, turn_power_batt, mass, cruise_speed, time_tof, time_climb, phi, gravity=9.81):
         """ 
         calculate laps, time, and energy needed for cruise 
         @return laps
         @return time_cruise_total
         @return E_cruise
         """
-        radius_m2_turn = mass * cruise_speed**2 / (1/np.cos(self.phi)*mass*gravity)/np.sin(self.phi)
-        time_turn_ea = radius_m2_turn/cruise_speed*(180*np.pi/180)
+        n = 1/np.cos(phi)
+        # radius_turn = mass * cruise_speed**2 / (1/np.cos(phi)*mass*gravity)/np.sin(phi)
+        radius_turn = cruise_speed**2 / (gravity *np.sqrt(n**(2)-1))  # m
+        time_turn_ea = radius_turn/cruise_speed*(np.pi)
         time_circle_ea = time_turn_ea*2
         time_straights_ea = self.length_straight/cruise_speed   # same for each unique cruising speed
         time_lap_1_temp = time_tof + time_climb + 2*time_turn_ea + time_straights_ea + time_circle_ea
         time_after_lap_1 = self.time_limit - time_climb - time_tof - time_lap_1_temp  # How much time left after first lap in seconds
         time_ea_lap = 2*time_straights_ea + 2*time_turn_ea + time_circle_ea
         laps = np.floor(1+time_after_lap_1/time_ea_lap)
-        n_turns = laps*4
+        n_m2s = laps*4
         n_straights = laps*2 - 1
         time_cruise_total = time_after_lap_1 + time_ea_lap*(laps-1)
-        E_cruise = (turn_power_batt*n_turns*time_turn_ea + level_power_batt*n_straights*time_straights_ea)/3600  # fixed change here
+        E_cruise = (turn_power_batt*n_m2s*time_turn_ea + level_power_batt*n_straights*time_straights_ea)/3600  # fixed change here
         return laps, time_cruise_total, E_cruise
 
     def calculate_ground_mission_score(self):
         """" calculate ground mission score """
-        t_gm = self.ducks* + np.ceil(self.cargo/10) + 5
-        self.ground_mission_score = max(0, min(25/t_gm, 1))
+        t_gm = self.ducks + np.ceil(self.cargo/5) + 5
+        self.ground_mission_score = max(0, min(12/t_gm, 1))
         return(self.ground_mission_score)
 
     def calculate_mission_two_score(self):
@@ -336,8 +341,9 @@ class aircraft():
         """ calculate banner stowed drag based off stowing method """
         if self.banner_stowing_config == 1:
             """ cylinder with axial air flow (i.e longitudinally placed)"""
-            self.CD_m3_banner_tof = 0.8 # Horner 3-12 fig 21 
-        
+            self.CD_m3_banner_tof = 0.2 # Horner 3-12 fig 21 
+    
+
     def size_m2_fuselage(self, battery_volume, motor_volume):
         """ wrapper to size fuselage from mission two parameters """
         volume_m2_electronics = (battery_volume + motor_volume)
@@ -425,7 +431,7 @@ class aircraft():
             self.CD_m2_cruise = self.CD_m2_min_cruise + self.k*self.CL_m2_cruise**2
             self.drag_m2_cruise = 1/2*self.CD_m2_cruise*self.rho*self.V_m2_cruise**(2)*self.S
             p_dyn_m2_turn = 1/2*self.rho*self.V_m2_cruise**(2)
-            self.drag_m2_turn = p_dyn_m2_turn*self.S*(self.CD_m2_min_cruise + self.k*(1/np.cos(self.phi)*self.CL_m2_cruise)**(2))
+            self.drag_m2_turn = p_dyn_m2_turn*self.S*(self.CD_m2_min_cruise + self.k*(self.n_m2*self.CL_m2_cruise)**(2))
 
             # Constraint analysis between take off and constant velocity level turn
             self.P_m2_tof_avail = self.calculate_take_off_power(self.mass_m2_gross_list[i], self.CD_m2_tof, self.CL_m2_tof, mu=0.05)
@@ -455,7 +461,7 @@ class aircraft():
 
             # Energy needed for cruise segment
             P_m2_level_batt = self.drag_m2_cruise*self.V_m2_cruise / self.eff_system_cruise
-            self.laps_m2, self.time_m2_cruise, self.E_m2_cruise = self.calculate_cruise_performance(P_m2_level_batt, P_m2_turn_batt, self.mass_m2_gross_list[i], self.V_m2_cruise, self.time_m2_tof, self.time_m2_climb)
+            self.laps_m2, self.time_m2_cruise, self.E_m2_cruise = self.calculate_cruise_performance(P_m2_level_batt, P_m2_turn_batt, self.mass_m2_gross_list[i], self.V_m2_cruise, self.time_m2_tof, self.time_m2_climb, self.phi_m2)
 
             # -- Mission Three -- #
             # Goal: Size propulsion system for mission three by accounting for banner stowed and free drag
@@ -471,11 +477,11 @@ class aircraft():
             # cruise performance
             self.CL_m3_cruise = self.mass_m3_gross_list[i]*9.81*2/self.rho/self.V_m3_cruise**(2)/self.S
             self.CD_m3_min_cruise = self.CDmin_no_fus + self.CD_m3_fus_cruise
-            self.CD_m3_banner_cruise = 0.1*(self.l_banner**2)/(self.AR_banner)    # adjust coefficient for accuracy, original: 0.2
+            self.CD_m3_banner_cruise = 0.09*(self.l_banner**2)/(self.AR_banner)    # adjust coefficient for accuracy, original: 0.033
             self.CD_m3_cruise = self.CD_m3_min_cruise + self.k*self.CL_m3_cruise**2 + self.CD_m3_banner_cruise
             self.drag_m3_cruise = self.CD_m3_cruise*1/2*self.rho*self.V_m3_cruise**(2)*self.S_fuselage
             p_dyn_m3_turn = 1/2*self.rho*self.V_m3_cruise**2
-            self.drag_m3_turn = p_dyn_m3_turn*self.S*(self.CD_m3_min_cruise + self.CD_m3_banner_cruise + self.k*(1/np.cos(self.phi)*self.CL_m3_cruise)**(2))
+            self.drag_m3_turn = p_dyn_m3_turn*self.S*(self.CD_m3_min_cruise + self.CD_m3_banner_cruise + self.k*(self.n_m3*self.CL_m3_cruise)**(2))
 
             # Constraint analysis between take off and constant velocity level turn
             self.P_m3_tof_avail = self.calculate_take_off_power(self.mass_m3_gross_list[i], self.CD_m3_tof, self.CL_m3_tof, mu=0.05)
@@ -505,7 +511,7 @@ class aircraft():
 
             # Energy needed for cruise segment
             P_m3_level_batt = self.drag_m3_cruise*self.V_m3_cruise/self.eff_system_cruise
-            self.laps_m3, self.time_m3_cruise, self.E_m3_cruise = self.calculate_cruise_performance(P_m3_level_batt, P_m3_turn_batt, self.mass_m3_gross_list[i], self.V_m3_cruise, self.time_m3_tof, self.time_m3_climb)
+            self.laps_m3, self.time_m3_cruise, self.E_m3_cruise = self.calculate_cruise_performance(P_m3_level_batt, P_m3_turn_batt, self.mass_m3_gross_list[i], self.V_m3_cruise, self.time_m3_tof, self.time_m3_climb, self.phi_m3)
 
             # ----- Propulsion Sizing ------ #
             # Motor, sized for most power needed from M2 or M3
@@ -532,6 +538,7 @@ class aircraft():
             sizing_error_m3_batt.append(error_battery_m3)
             sizing_error = max(error_battery_m2, error_battery_m3, error_motor)
             if sizing_error < 0.01:
+                self.mass_m1_gross = self.mass_empty_list[i]
                 self.mass_m2_gross = self.mass_m2_gross_list[i]  # I may need a better way to name these things...
                 self.mass_m3_gross = self.mass_m3_gross_list[i]
                 self.wing_loading_m2 = self.mass_m2_gross * 9.81 / self.S
@@ -549,7 +556,6 @@ class aircraft():
                 self.E_battery_m2 = self.E_battery_m2_list[i]
                 self.E_battery_m3 = self.E_battery_m3_list[i]
 
-                self.n_turn = 1/np.cos(self.phi)
                 break
 
         if debug_text is True:
@@ -625,7 +631,7 @@ class aircraft():
         print(f"stall speed: {self.V_m3_st} m/s, lift off speed: {self.V_m3_tof} m/s, cruise speed: {self.V_m3_cruise} m/s")
         print("======= Overall performance =======")
         print(f"motor power: {self.P_motor} W, battery power: {self.P_sizing_batt} W")
-        print(f"total mission score: {self.total_mission_score}, gm: {self.ground_mission_score}, load_factor: {self.n_turn}")
+        print(f"total mission score: {self.total_mission_score}, gm: {self.ground_mission_score}\n load_factor_m2: {self.n_m2}, load_factor_m3: {self.n_m3}")
         plt.figure()
         plt.title("M2 battery energy per iteration")
         plt.plot(self.iteration_all, self.E_battery_m2_list)
@@ -641,3 +647,6 @@ class aircraft():
         plt.figure()
         plt.title('banner config gross mass per iteration in kg')
         plt.plot(self.iteration_all, self.mass_m3_gross_list)
+
+    def mass_buildup_summary(self):
+        """ print summary of mass build up of aircraft"""

@@ -18,6 +18,8 @@ class MonteCarlo:
         self.laps_m2 =[]
         self.l_banner = []
         self.cruise_speed_m3 = []
+        self.phi_m2_deg = []
+        self.phi_m3_deg = []
         self.laps_m3 = []
         self.aircraft_list = []
         self.mission_two_score = []
@@ -39,21 +41,23 @@ class MonteCarlo:
 
     @staticmethod
     def generate_monte_carlo_inputs():
-        """ return: [wingspan, aspect_ratio, cargo, ducks, m2_cruise_speed, banner_length, m3_cruise_speed]"""
-        wing_span = random.uniform(0.9144, 1.524)
-        # wing_span = 1.524   # m
-        aspect_ratio = random.uniform(3, 12)
-        cargo = np.floor(random.uniform(1, 30))
-        ducks = np.floor(random.uniform(3*cargo, 120))
+        """ return: [wingspan, aspect_ratio, cargo, ducks, m2_cruise_speed, banner_length, m3_cruise_speed, m2_bank_angle, m3_bank_angle] """
+        wing_span = 1.524   # m
+        # wing_span = random.uniform(0.9144, 1.524)
+        aspect_ratio = random.uniform(3, 8)
+        cargo = np.floor(random.uniform(1, 5))
+        ducks = np.floor(random.uniform(3*cargo, 30))
         m2_cruise_speed = random.uniform(10, 40)
         l_banner = random.uniform(0.3, 12)
         m3_cruise_speed = random.uniform(10, 40)
-        return (np.array([wing_span, aspect_ratio, cargo, ducks, m2_cruise_speed, l_banner, m3_cruise_speed]))
+        m2_bank_angle = random.uniform(np.pi/12, 1.4)  # max load factor of 4 :1.318 rad
+        m3_bank_angle = random.uniform(np.pi/12, np.pi/6)   # max 30 degree bank
+        return (np.array([wing_span, aspect_ratio, cargo, ducks, m2_cruise_speed, l_banner, m3_cruise_speed, m2_bank_angle, m3_bank_angle]))
     
     def run_simulation(self):
         """ run monte carlo simulation """
         conditions = { 'altitude asl':397,'cruise altitude agl':10}
-        aircraft_design_parameters = {'aspect ratio' : 4,'wing span':1.5,'CLmax':0.9,'CDmin_no_fuselage':0.03,'fineness ratio':6,'turning bank angle':np.pi/4}
+        aircraft_design_parameters = {'aspect ratio' : 4,'wing span':1.5,'CLmax':0.9,'CDmin_no_fuselage':0.03,'fineness ratio':6,'m2 bank angle':np.pi/4, 'm3 bank angle': np.pi/4}
         aircraft_design_parameters['conditions'] = conditions
         mission_parameters = {'cargo':15,'ducks':45,'mission two cruise speed': 25,'banner length':12,'mission three cruise speed':20,'banner aspect ratio':5}
         course_parameters = {'ground run': 30,'time limit': 300,'length of straights': 304.8 }
@@ -70,6 +74,8 @@ class MonteCarlo:
             mission_parameters['mission two cruise speed'] = self.parameters[i][4]
             mission_parameters['banner length'] = self.parameters[i][5]
             mission_parameters['mission three cruise speed'] = self.parameters[i][6]
+            mission_parameters['m2 bank angle'] = self.parameters[i][7]
+            mission_parameters['m3 bank angle'] = self.parameters[i][8]
 
             temp_aircraft = aircraft(aircraft_design_parameters, mission_parameters, course_parameters, initial_guess)
             with np.errstate(over='ignore', invalid='ignore'):  # don't log errors
@@ -78,7 +84,7 @@ class MonteCarlo:
                 continue
             elif temp_aircraft.mass_m2_gross<0.001 or temp_aircraft.mass_m3_gross<0.001:
                 continue
-            elif temp_aircraft.P_motor > 4000:
+            elif temp_aircraft.P_motor > 4000 or temp_aircraft.V_m3_cruise<=1.2*temp_aircraft.V_m3_st:
                 continue
             else: 
                 temp_aircraft.calculate_total_mission_score()
@@ -91,6 +97,8 @@ class MonteCarlo:
                 self.cruise_speed_m2.append(self.parameters[i][4])
                 self.l_banner.append(self.parameters[i][5])
                 self.cruise_speed_m3.append(self.parameters[i][6])
+                self.phi_m2_deg.append(self.parameters[i][7]*180/np.pi)
+                self.phi_m3_deg.append(self.parameters[i][8]*180/np.pi)
 
                 self.laps_m2.append(temp_aircraft.laps_m2)
                 self.laps_m3.append(temp_aircraft.laps_m3)
@@ -289,10 +297,38 @@ class MonteCarlo:
         ax.set_ylabel('M3, W*hr')
         ax.set_zlabel('motor, W')
 
+    def plot_m2laps_m2phi_m2aspd(self):
+        plt.figure()
+        laps = np.asarray(self.laps_m2)
+        phi = np.asarray(self.phi_m2_deg)
+        v = np.asarray(self.cruise_speed_m2)
+        ax = plt.gcf().add_subplot(111, projection='3d')
+        sc = ax.scatter(laps, phi, v, c=laps, cmap='magma')
+        cb = plt.colorbar(sc, ax=ax, shrink=0.6, location='left')
+        cb.set_label('laps m2')
+        ax.set_title('M2 Laps by bank angle and cruise speed')
+        ax.set_xlabel('laps m2')
+        ax.set_ylabel('bank angle (deg)')
+        ax.set_zlabel('Vcruise_m2 (m/s)')
+
+    def plot_m3laps_m3phi_m3aspd(self):
+        plt.figure()
+        laps = np.asarray(self.laps_m3)
+        phi = np.asarray(self.phi_m3_deg)
+        v = np.asarray(self.cruise_speed_m3)
+        ax = plt.gcf().add_subplot(111, projection='3d')
+        sc = ax.scatter(laps, phi, v, c=laps, cmap='magma')
+        cb = plt.colorbar(sc, ax=ax, shrink=0.6, location='left')
+        cb.set_label('laps m3')
+        ax.set_title('M3 Laps by bank angle and cruise speed')
+        ax.set_xlabel('laps m3')
+        ax.set_ylabel('bank angle (deg)')
+        ax.set_zlabel('Vcruise_m3 (m/s)')
+
 
 plt.rcParams['axes.grid'] = True
 
-samples = 20000
+samples = 30000
 sim = MonteCarlo(samples)
 sim.run_simulation()
 print(f'\n\n\n\nconverged: {len(sim.converged_parameters)}')
@@ -306,12 +342,13 @@ best_index = sim.total_mission_score.index(max_score)
 best_plane = sim.aircraft_list[best_index]
 best_plane.all_sizing_summary()
 
-# sim.plot_m2_cargo_ducks_aspd()
 sim.plot_m2_gm_cargo_ducks_aspd()
 sim.plot_m2_gm_pw_ws_ebatt()
 sim.plot_total_score_em2_em3_pm()
 sim.plot_m3_lbanner_ar_m3speed()
 sim.plot_total_score_lbanner_ar_ebatt()
 sim.plot_total_score_em2_em3_pm()
+# sim.plot_m2laps_m2phi_m2aspd()
+# sim.plot_m3laps_m3phi_m3aspd()
 plt.show()
 
