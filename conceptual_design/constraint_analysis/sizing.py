@@ -321,7 +321,7 @@ class aircraft():
         income = self.ducks*(6 + 2*self.laps_m2) + self.cargo*(10 + 8*self.laps_m2)
         cost = self.E_battery_m2/100*self.laps_m2*(10+self.ducks*0.5+self.cargo*2)
         self.m2_net_income = income - cost
-        self.mission_two_score = 1 + max(0, min((self.m2_net_income)/2300, 1))
+        self.mission_two_score = 1 + max(0, min((self.m2_net_income)/4600, 1))  # was 2300
         return(self.mission_two_score)
 
     def calculate_mission_three_score(self):
@@ -330,7 +330,7 @@ class aircraft():
         b_ft = self.b/3.281
         m3_cost = length_in*self.laps_m3/(0.05*b_ft+0.75)
         self.m3_cost = m3_cost
-        self.mission_three_score =2 + max(0, min(m3_cost/2000, 1))
+        self.mission_three_score =2 + max(0, min(m3_cost/1300, 1))
         return(self.mission_three_score)
 
     def calculate_total_mission_score(self):

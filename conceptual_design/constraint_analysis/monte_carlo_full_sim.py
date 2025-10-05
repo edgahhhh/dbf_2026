@@ -45,8 +45,8 @@ class MonteCarlo:
         wing_span = 1.524   # m
         # wing_span = random.uniform(0.9144, 1.524)
         aspect_ratio = random.uniform(3, 8)
-        cargo = np.floor(random.uniform(1, 5))
-        ducks = np.floor(random.uniform(3*cargo, 30))
+        cargo = np.floor(random.uniform(1, 30))
+        ducks = np.floor(random.uniform(3*cargo, 400))
         m2_cruise_speed = random.uniform(10, 40)
         l_banner = random.uniform(0.3, 12)
         m3_cruise_speed = random.uniform(10, 40)
@@ -328,7 +328,7 @@ class MonteCarlo:
 
 plt.rcParams['axes.grid'] = True
 
-samples = 30000
+samples = 100000
 sim = MonteCarlo(samples)
 sim.run_simulation()
 print(f'\n\n\n\nconverged: {len(sim.converged_parameters)}')
