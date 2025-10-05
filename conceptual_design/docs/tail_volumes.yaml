@@ -1,0 +1,16 @@
+# Database of tail volumes for dbf planes
+2020:
+  V_vt:
+    - 0.05
+    - 0.0596
+    - 0.0534
+  V_ht:
+    - 0.6
+    - 0.389
+    - 0.546
+  AR_vt:
+    - 1.92
+    - 1
+  AR_ht:
+    - 4.426
+    - 2.22
