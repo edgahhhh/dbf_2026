@@ -1,4 +1,4 @@
-from sizing import aircraft
+from constraint_analysis.sizing import aircraft
 import numpy as np
 import random
 import matplotlib.pyplot as plt
@@ -38,20 +38,29 @@ class MonteCarlo:
         self.mass_m3_gross = []
         self.m2_net_income = []
         self.m3_cost = []
+        self.cd_depl_banner = []
 
     @staticmethod
     def generate_monte_carlo_inputs():
         """ return: [wingspan, aspect_ratio, cargo, ducks, m2_cruise_speed, banner_length, m3_cruise_speed, m2_bank_angle, m3_bank_angle] """
-        wing_span = 1.524   # m
         # wing_span = random.uniform(0.9144, 1.524)
-        aspect_ratio = random.uniform(3, 8)
-        cargo = np.floor(random.uniform(1, 30))
-        ducks = np.floor(random.uniform(3*cargo, 400))
-        m2_cruise_speed = random.uniform(10, 40)
-        l_banner = random.uniform(0.3, 12)
-        m3_cruise_speed = random.uniform(10, 40)
-        m2_bank_angle = random.uniform(np.pi/12, 1.4)  # max load factor of 4 :1.318 rad
+        aspect_ratio = random.uniform(3, 6)
+        m2_cruise_speed = random.uniform(15, 30)
+        m3_cruise_speed = random.uniform(10, 14)
+        m2_bank_angle = random.uniform(np.pi/12, 1.318)  # max load factor of 4 :1.318 rad
         m3_bank_angle = random.uniform(np.pi/12, np.pi/6)   # max 30 degree bank
+        l_banner = random.uniform(1, 11.5)
+        # cargo = np.floor(random.uniform(1, 30))
+        # ducks = np.floor(random.uniform(3*cargo, 250))
+
+        wing_span = 1.524   # m
+        # aspect_ratio = 4
+        # m2_cruise_speed = 18
+        # m3_cruise_speed = 13
+        # m2_bank_angle = 1.2658
+        # m3_bank_angle = np.pi/4
+        cargo = 1
+        ducks = 3
         return (np.array([wing_span, aspect_ratio, cargo, ducks, m2_cruise_speed, l_banner, m3_cruise_speed, m2_bank_angle, m3_bank_angle]))
     
     def run_simulation(self):
@@ -74,17 +83,17 @@ class MonteCarlo:
             mission_parameters['mission two cruise speed'] = self.parameters[i][4]
             mission_parameters['banner length'] = self.parameters[i][5]
             mission_parameters['mission three cruise speed'] = self.parameters[i][6]
-            mission_parameters['m2 bank angle'] = self.parameters[i][7]
-            mission_parameters['m3 bank angle'] = self.parameters[i][8]
+            aircraft_design_parameters['m2 bank angle'] = self.parameters[i][7]
+            aircraft_design_parameters['m3 bank angle'] = self.parameters[i][8]
 
-            temp_aircraft = aircraft(aircraft_design_parameters, mission_parameters, course_parameters, initial_guess)
+            temp_aircraft = aircraft(aircraft_design_parameters, mission_parameters, course_parameters, initial_guess, banner_data='conceptual_design/docs/banner_data.yaml')
             with np.errstate(over='ignore', invalid='ignore'):  # don't log errors
                 temp_aircraft.size_aircraft_all_missions()
             if not np.isfinite(temp_aircraft.V_m2_st) or temp_aircraft.E_battery_m2>99.99 or temp_aircraft.E_battery_m3>99.99:  # throw out models that don't converge or exceed 100 Whr
                 continue
             elif temp_aircraft.mass_m2_gross<0.001 or temp_aircraft.mass_m3_gross<0.001:
                 continue
-            elif temp_aircraft.P_motor > 4000 or temp_aircraft.V_m3_cruise<=1.2*temp_aircraft.V_m3_st:
+            elif temp_aircraft.P_sizing_batt > 1200 or temp_aircraft.V_m3_cruise<=1.2*temp_aircraft.V_m3_st:
                 continue
             else: 
                 temp_aircraft.calculate_total_mission_score()
@@ -124,6 +133,8 @@ class MonteCarlo:
 
                 self.m2_net_income.append(temp_aircraft.m2_net_income)
                 self.m3_cost.append(temp_aircraft.m3_cost)
+
+                self.cd_depl_banner.append(temp_aircraft.CD_m3_banner_cruise)
 
     def plot_m2_cargo_ducks_aspd(self):
         """ plot m2 scoring by cargo, ducks, and cruise speed """
@@ -297,44 +308,70 @@ class MonteCarlo:
         ax.set_ylabel('M3, W*hr')
         ax.set_zlabel('motor, W')
 
-    def plot_m2laps_m2phi_m2aspd(self):
+    def plot_score_m2laps_m2phi_m2aspd(self):
         plt.figure()
         laps = np.asarray(self.laps_m2)
         phi = np.asarray(self.phi_m2_deg)
         v = np.asarray(self.cruise_speed_m2)
+        m = np.asarray(self.total_mission_score)
         ax = plt.gcf().add_subplot(111, projection='3d')
-        sc = ax.scatter(laps, phi, v, c=laps, cmap='magma')
+        sc = ax.scatter(laps, phi, v, c=m, cmap='magma')
         cb = plt.colorbar(sc, ax=ax, shrink=0.6, location='left')
-        cb.set_label('laps m2')
+        cb.set_label('mission score')
         ax.set_title('M2 Laps by bank angle and cruise speed')
         ax.set_xlabel('laps m2')
         ax.set_ylabel('bank angle (deg)')
         ax.set_zlabel('Vcruise_m2 (m/s)')
 
-    def plot_m3laps_m3phi_m3aspd(self):
+    def plot_score_m3laps_m3phi_m3aspd(self):
         plt.figure()
         laps = np.asarray(self.laps_m3)
         phi = np.asarray(self.phi_m3_deg)
         v = np.asarray(self.cruise_speed_m3)
+        m = np.asarray(self.total_mission_score)
         ax = plt.gcf().add_subplot(111, projection='3d')
-        sc = ax.scatter(laps, phi, v, c=laps, cmap='magma')
+        sc = ax.scatter(laps, phi, v, c=m, cmap='magma')
         cb = plt.colorbar(sc, ax=ax, shrink=0.6, location='left')
-        cb.set_label('laps m3')
+        cb.set_label('mission score')
         ax.set_title('M3 Laps by bank angle and cruise speed')
         ax.set_xlabel('laps m3')
         ax.set_ylabel('bank angle (deg)')
         ax.set_zlabel('Vcruise_m3 (m/s)')
 
+    def plot_m2net_m2n_m2aspd(self):
+        plt.figure()
+        ni = np.asarray(self.m2_net_income)
+        n = 1/np.cos(np.asarray(self.phi_m2_deg)*np.pi/180)
+        # n = np.asarray(1/np.cos(self.phi_m2_deg*np.pi/180))
+        v = np.asarray(self.cruise_speed_m2)
+        ax = plt.gcf().add_subplot(111, projection='3d')
+        sc = ax.scatter(n, v, ni)
+        ax.set_title('M2 Net Income by load factor and cruise speed')
+        ax.set_xlabel('load factor')
+        ax.set_ylabel('Vcruise_m2 (m/s)')
+        ax.set_zlabel('net income ($)')
+
+    def plot_banner_cd_length(self):
+        plt.figure()
+        l = np.asarray(self.l_banner)
+        cd = np.asarray(self.cd_depl_banner) * np.asarray(self.wing_area) / (l**(2)/5)
+        plt.plot(l, cd)
+        plt.title('Banner CD and Length')
+        plt.xlabel('l_banner (m)')
+        plt.ylabel('CD (Sbanner)')
+
+
 
 plt.rcParams['axes.grid'] = True
 
-samples = 100000
+samples = 10000
 sim = MonteCarlo(samples)
 sim.run_simulation()
 print(f'\n\n\n\nconverged: {len(sim.converged_parameters)}')
 
 print(f"max m2, net income {max(sim.m2_net_income)}")
 print(f"max m3, cost {max(sim.m3_cost)}")
+print(f'max banner length: {np.max(sim.l_banner)} m')
 print('\n\n')
 
 max_score = max(sim.total_mission_score)
@@ -342,13 +379,20 @@ best_index = sim.total_mission_score.index(max_score)
 best_plane = sim.aircraft_list[best_index]
 best_plane.all_sizing_summary()
 
+# max_banner = max(sim.l_banner)
+# max_index = sim.l_banner.index(max_banner)
+# max_banner_plane = sim.aircraft_list[max_index]
+# max_banner_plane.all_sizing_summary()
+
 sim.plot_m2_gm_cargo_ducks_aspd()
-sim.plot_m2_gm_pw_ws_ebatt()
+# sim.plot_m2_gm_pw_ws_ebatt()
 sim.plot_total_score_em2_em3_pm()
 sim.plot_m3_lbanner_ar_m3speed()
 sim.plot_total_score_lbanner_ar_ebatt()
 sim.plot_total_score_em2_em3_pm()
-# sim.plot_m2laps_m2phi_m2aspd()
-# sim.plot_m3laps_m3phi_m3aspd()
+sim.plot_score_m2laps_m2phi_m2aspd()
+sim.plot_score_m3laps_m3phi_m3aspd()
+sim.plot_m2net_m2n_m2aspd()
+sim.plot_banner_cd_length()
 plt.show()
 

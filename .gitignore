@@ -1,8 +1,9 @@
 # non-binary folders
 ppts/
-.xlsx
-.docx
-.pptx
+**/*.xlsx
+**/*.docx
+**/*.pptx
+/docs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

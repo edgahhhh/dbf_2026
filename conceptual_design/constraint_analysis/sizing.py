@@ -1,8 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import yaml
+from scipy.interpolate import interp1d
 
 class aircraft():
-    def __init__(self, aircraft_design_parameters, mission_parameters, course_parameters, initial_guess, banner_stowing_config=1):
+    def __init__(self, aircraft_design_parameters, mission_parameters, course_parameters, initial_guess, banner_data, banner_stowing_config=1):
         """ Initialize aircraft model, initialize model each time you size aircraft """
         # Aircraft Parameters
         self.AR = aircraft_design_parameters['aspect ratio']
@@ -11,7 +13,6 @@ class aircraft():
         self.CLmax = aircraft_design_parameters['CLmax']
         self.CDmin_no_fus = aircraft_design_parameters['CDmin_no_fuselage']
         self.k = 1/(np.pi*self.AR*0.85)
-        # self.roc = aircraft_design_parameters['rate of climb']
         self.fineness_ratio = aircraft_design_parameters['fineness ratio']
 
         # Mission parameters, instead of laps, cruising speed is used for simplification
@@ -54,6 +55,13 @@ class aircraft():
         self.banner_stowing_electronics = 0.02  # I think 20 grams is reasonable, thats like three servos
         self.mass_propulsion_electronics = 0.5  # estimation from 2020 planes, including prop, spinner, reciever, RX battery, etc...
         
+        # Banner drag data
+        with open(banner_data, 'r') as file:
+            self.banner_data= yaml.safe_load(file)
+        self.banner_data_l = self.banner_data['length']
+        self.banner_data_cd = self.banner_data['CD']
+        self.banner_cd_interp_fun = interp1d(self.banner_data_l, self.banner_data_cd, fill_value='extrapolate')
+
         # Systems parameters, more or less placeholders for the time being, estimating power flow in take off and cruise
         self.eff_propeller_tof = 0.4
         self.eff_motor_tof = 0.9
@@ -312,25 +320,31 @@ class aircraft():
 
     def calculate_ground_mission_score(self):
         """" calculate ground mission score """
-        t_gm = self.ducks + np.ceil(self.cargo/5) + 5
-        self.ground_mission_score = max(0, min(12/t_gm, 1))
+        t_per_duck = 2
+        t_per_cargo = 2.5
+        t_banner = 5
+        t_best = t_per_duck*3 + t_per_cargo + t_banner
+        t_gm = t_per_duck*self.ducks + t_per_cargo*self.cargo + t_banner
+        self.ground_mission_score = max(0, min(t_best/t_gm, 1))
         return(self.ground_mission_score)
 
     def calculate_mission_two_score(self):
         """ calculate total mission two score """
+        best_net = 3400
         income = self.ducks*(6 + 2*self.laps_m2) + self.cargo*(10 + 8*self.laps_m2)
         cost = self.E_battery_m2/100*self.laps_m2*(10+self.ducks*0.5+self.cargo*2)
         self.m2_net_income = income - cost
-        self.mission_two_score = 1 + max(0, min((self.m2_net_income)/4600, 1))  # was 2300
+        self.mission_two_score = 1 + max(0, min((self.m2_net_income)/best_net, 1))  # was 2300
         return(self.mission_two_score)
 
     def calculate_mission_three_score(self):
         """ calculate mission three score """
+        best_cost = 1720
         length_in = self.l_banner*39.37
         b_ft = self.b/3.281
         m3_cost = length_in*self.laps_m3/(0.05*b_ft+0.75)
         self.m3_cost = m3_cost
-        self.mission_three_score =2 + max(0, min(m3_cost/1300, 1))
+        self.mission_three_score =2 + max(0, min(m3_cost/best_cost, 1))
         return(self.mission_three_score)
 
     def calculate_total_mission_score(self):
@@ -343,7 +357,6 @@ class aircraft():
             """ cylinder with axial air flow (i.e longitudinally placed)"""
             self.CD_m3_banner_tof = 0.2 # Horner 3-12 fig 21 
     
-
     def size_m2_fuselage(self, battery_volume, motor_volume):
         """ wrapper to size fuselage from mission two parameters """
         volume_m2_electronics = (battery_volume + motor_volume)
@@ -384,7 +397,7 @@ class aircraft():
         sizing_error_m2_batt = []
         sizing_error_m3_batt = []
         sizing_error_motor = []
-        for i in range(50):
+        for i in range(10):
             self.iteration_all.append(i)
             if i == 0:
                 """ initial guess """
@@ -477,11 +490,19 @@ class aircraft():
             # cruise performance
             self.CL_m3_cruise = self.mass_m3_gross_list[i]*9.81*2/self.rho/self.V_m3_cruise**(2)/self.S
             self.CD_m3_min_cruise = self.CDmin_no_fus + self.CD_m3_fus_cruise
-            self.CD_m3_banner_cruise = 0.09*(self.l_banner**2)/(self.AR_banner)    # adjust coefficient for accuracy, original: 0.033
+            # S_banner = self.l_banner**2 / self.AR_banner
+
+            temp_CD = self.banner_cd_interp_fun(self.l_banner)
+
+            self.CD_m3_banner_cruise = max( min(self.banner_data_cd), min(temp_CD, max(self.banner_data_cd))) * self.l_banner**(2)/self.AR_banner/self.S
+
+
+            # self.CD_m3_banner_cruise = 0.02 * ((self.l_banner**(2)/self.AR_banner)/self.S) # (0.579*np.exp(-18.505*S_banner)+0.0655)*(S_banner/self.S) # 0.033*((self.l_banner**2)/(self.AR_banner))**(2)/self.S 
             self.CD_m3_cruise = self.CD_m3_min_cruise + self.k*self.CL_m3_cruise**2 + self.CD_m3_banner_cruise
-            self.drag_m3_cruise = self.CD_m3_cruise*1/2*self.rho*self.V_m3_cruise**(2)*self.S_fuselage
-            p_dyn_m3_turn = 1/2*self.rho*self.V_m3_cruise**2
-            self.drag_m3_turn = p_dyn_m3_turn*self.S*(self.CD_m3_min_cruise + self.CD_m3_banner_cruise + self.k*(self.n_m3*self.CL_m3_cruise)**(2))
+            p_dyn_m3_cruise = 1/2*self.rho*self.V_m3_cruise**2
+            self.drag_m3_cruise = p_dyn_m3_cruise*self.S*(self.CD_m3_min_cruise + self.CD_m3_banner_cruise + self.k*(self.CL_m3_cruise)**(2))
+            # self.CD_m3_cruise*1/2*self.rho*self.V_m3_cruise**(2)*self.S_fuselage
+            self.drag_m3_turn = p_dyn_m3_cruise*self.S*(self.CD_m3_min_cruise + self.CD_m3_banner_cruise + self.k*(self.n_m3*self.CL_m3_cruise)**(2))
 
             # Constraint analysis between take off and constant velocity level turn
             self.P_m3_tof_avail = self.calculate_take_off_power(self.mass_m3_gross_list[i], self.CD_m3_tof, self.CL_m3_tof, mu=0.05)
