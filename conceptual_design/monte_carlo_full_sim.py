@@ -49,7 +49,7 @@ class MonteCarlo:
         m3_cruise_speed = random.uniform(10, 14)
         m2_bank_angle = random.uniform(np.pi/12, 1.318)  # max load factor of 4 :1.318 rad
         m3_bank_angle = random.uniform(np.pi/12, np.pi/6)   # max 30 degree bank
-        l_banner = random.uniform(1, 11.5)
+        l_banner = random.uniform(1, 12)
         # cargo = np.floor(random.uniform(1, 30))
         # ducks = np.floor(random.uniform(3*cargo, 250))
 
@@ -196,13 +196,13 @@ class MonteCarlo:
         m2_gm_np = np.asarray(self.mission_two_and_ground_mission_score)
         vc_np = np.asarray(self.cruise_speed_m2)
         ax = plt.gcf().add_subplot(111, projection='3d')
-        ax.set_title('M2 and GM score by cargo, ducks, and Vcruise')
+        ax.set_title('M2 and GM score from cargo, ducks, and M2 cruise speed')
         sc = ax.scatter(cargo_np, ducks_np, vc_np, c=m2_gm_np, cmap='magma')
-        ax.set_xlabel('cargo')
-        ax.set_ylabel('ducks')
-        ax.set_zlabel('cruise speed (m/s)')
+        ax.set_xlabel('Cargo')
+        ax.set_ylabel('Ducks')
+        ax.set_zlabel('Vcruise M2 (m/s)')
         cb = plt.colorbar(sc, ax=ax, shrink=0.6, location='left')
-        cb.set_label('m2 + gm')
+        cb.set_label('M2 + GM Score')
 
     def plot_m2_gm_pw_ws_ebatt(self):
         """ plot m2 and gm score by power loading, wing loading, and battery energy """
@@ -259,11 +259,26 @@ class MonteCarlo:
         ax = plt.gcf().add_subplot(111, projection='3d')
         sc = ax.scatter(l, ar, v, c=m3, cmap='magma')
         cb = plt.colorbar(sc, ax=ax, shrink=0.6, location='left')
-        cb.set_label('m3 score')
-        ax.set_title('M3 Score by l_banner, AR, and V_cruise_m3')
-        ax.set_xlabel('l_banner (m)')
-        ax.set_ylabel('AR')
-        ax.set_zlabel('Vcruise_m3 (m/s)')
+        cb.set_label('M3 score')
+        ax.set_title('M3 score from banner length, AR, and M3 cruise speed')
+        ax.set_xlabel('banner length (m)')
+        ax.set_ylabel('AR wing')
+        ax.set_zlabel('Vcruise M3 (m/s)')
+
+    def plot_m_lbanner_ar_m3speed(self):
+        plt.figure()
+        m = np.asarray(self.total_mission_score)
+        l = np.asarray(self.l_banner)
+        ar = np.asarray(self.aspect_ratio)
+        v = np.asarray(self.cruise_speed_m3)
+        ax = plt.gcf().add_subplot(111, projection='3d')
+        sc = ax.scatter(l, ar, v, c=m, cmap='magma')
+        cb = plt.colorbar(sc, ax=ax, shrink=0.6, location='left')
+        cb.set_label('Mission score')
+        ax.set_title('Mission score from banner length, AR, and M3 cruise speed')
+        ax.set_xlabel('banner length (m)')
+        ax.set_ylabel('AR wing')
+        ax.set_zlabel('Vcruise M3 (m/s)')
 
     def plot_total_score_lbanner_ar_m3laps(self):
         plt.figure()
@@ -360,6 +375,37 @@ class MonteCarlo:
         plt.xlabel('l_banner (m)')
         plt.ylabel('CD (Sbanner)')
 
+    def plot_m_lbanner_ar_m3speed_USC(self):
+        """ US Customary units """
+        plt.figure()
+        m = np.asarray(self.total_mission_score)
+        l = np.asarray(self.l_banner)*39.37  # m to in
+        ar = np.asarray(self.aspect_ratio)
+        v = np.asarray(self.cruise_speed_m3)*3.281  # m/s to ft/s
+        ax = plt.gcf().add_subplot(111, projection='3d')
+        sc = ax.scatter(l, ar, v, c=m, cmap='magma')
+        cb = plt.colorbar(sc, ax=ax, shrink=0.6, location='left')
+        cb.set_label('Mission score')
+        ax.set_title('Mission score from banner length, AR, and M3 cruise speed')
+        ax.set_xlabel('banner length (in)')
+        ax.set_ylabel('AR wing')
+        ax.set_zlabel('Vcruise M3 (ft/s)')
+
+    def plot_m2_gm_cargo_ducks_aspd_USC(self):
+        """ US customary units """
+        plt.figure()
+        cargo_np = np.asarray(self.cargo)
+        ducks_np = np.asarray(self.ducks)
+        m2_gm_np = np.asarray(self.mission_two_and_ground_mission_score)
+        vc_np = np.asarray(self.cruise_speed_m2)*3.281  # m/s to ft/s
+        ax = plt.gcf().add_subplot(111, projection='3d')
+        ax.set_title('M2 and GM score from cargo, ducks, and M2 cruise speed')
+        sc = ax.scatter(cargo_np, ducks_np, vc_np, c=m2_gm_np, cmap='magma')
+        ax.set_xlabel('Cargo')
+        ax.set_ylabel('Ducks')
+        ax.set_zlabel('Vcruise M2 (ft/s)')
+        cb = plt.colorbar(sc, ax=ax, shrink=0.6, location='left')
+        cb.set_label('M2 + GM score')
 
 
 plt.rcParams['axes.grid'] = True
@@ -377,22 +423,27 @@ print('\n\n')
 max_score = max(sim.total_mission_score)
 best_index = sim.total_mission_score.index(max_score)
 best_plane = sim.aircraft_list[best_index]
-best_plane.all_sizing_summary()
+# best_plane.all_sizing_summary()
 
 # max_banner = max(sim.l_banner)
 # max_index = sim.l_banner.index(max_banner)
 # max_banner_plane = sim.aircraft_list[max_index]
 # max_banner_plane.all_sizing_summary()
 
-sim.plot_m2_gm_cargo_ducks_aspd()
-# sim.plot_m2_gm_pw_ws_ebatt()
-sim.plot_total_score_em2_em3_pm()
-sim.plot_m3_lbanner_ar_m3speed()
-sim.plot_total_score_lbanner_ar_ebatt()
-sim.plot_total_score_em2_em3_pm()
-sim.plot_score_m2laps_m2phi_m2aspd()
-sim.plot_score_m3laps_m3phi_m3aspd()
-sim.plot_m2net_m2n_m2aspd()
-sim.plot_banner_cd_length()
+# sim.plot_m2_gm_cargo_ducks_aspd()
+# # sim.plot_m2_gm_pw_ws_ebatt()
+# sim.plot_total_score_em2_em3_pm()
+# sim.plot_m3_lbanner_ar_m3speed()
+# sim.plot_total_score_lbanner_ar_ebatt()
+# sim.plot_total_score_em2_em3_pm()
+# sim.plot_score_m2laps_m2phi_m2aspd()
+# sim.plot_score_m3laps_m3phi_m3aspd()
+# sim.plot_m2net_m2n_m2aspd()
+# sim.plot_banner_cd_length()
+
+# sim.plot_m_lbanner_ar_m3speed()
+
+sim.plot_m2_gm_cargo_ducks_aspd_USC()
+sim.plot_m_lbanner_ar_m3speed_USC()
 plt.show()
 
