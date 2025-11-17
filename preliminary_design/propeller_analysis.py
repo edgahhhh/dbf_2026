@@ -9,7 +9,7 @@ import yaml
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from mpl_toolkits.mplot3d import Axes3D
-from propeller import Propeller
+from aircraft.propeller import Propeller
 from aircraft.simple_plane import Aircraft
 plt.rcParams['axes.grid'] = True
 
@@ -67,7 +67,7 @@ class PropellerAnalysis():
             @param airspeed: velocity [m/s]
             @param drag: required thrust [N]
         """
-        rpm_array = np.linspace(100, 50000, 4000)
+        rpm_array = np.linspace(100, 60000, 10000)
         n_array = rpm_array * 2*np.pi/60  # rad/s
 
         threshold = 0.1  # N tolerance
@@ -97,7 +97,7 @@ class PropellerAnalysis():
         eta = airspeed*thrust / power
         return thrust, power, eta, rpm
 
-    def energy_from_banner(self, banner, cruise_airspeed):
+    def energy_from_banner(self, banner):
         """ Calculate energy for a banner at given airspeed
         function uses the aircraft object solved at __init__()
             @param banner: length of banner [m]
@@ -113,6 +113,8 @@ class PropellerAnalysis():
         area_banner = banner**(2)/5 # m^2
         mass_banner = area_banner * 0.0359  # kg, linear trend w/ area
         mass_total = mass_no_banner + mass_banner
+        cruise_airspeed = 1.2*np.sqrt(mass_total*9.81/(1/2*self.dummy_plane.rho*self.dummy_plane.S*self.dummy_plane.CLmax))
+
 
         # find cl at cruise current config
         cl_cruise = mass_total*9.81 / (1/2*self.dummy_plane.rho*cruise_airspeed**(2)*self.dummy_plane.S)
@@ -172,10 +174,10 @@ class PropellerAnalysis():
         a = lower_bound
         b = upper_bound
 
-        fa = self.energy_from_banner(a, cruise_airspeed) - target_energy
+        fa = self.energy_from_banner(a) - target_energy
         for i in range(iterations):
             c = (a+b)/2
-            f = self.energy_from_banner(c, cruise_airspeed) - target_energy
+            f = self.energy_from_banner(c) - target_energy
 
             if abs(f) <= 0.1:
                 print(f'object: {self.label}, converged with size_banner() after {i} iterations')
@@ -261,30 +263,8 @@ plt.tight_layout()
 plt.figure()
 plt.bar(labels, banner_lengths)
 plt.xticks(rotation=45, ha='right')
-plt.ylabel('Banner Length at 99Whr')
-plt.title('Largest Banner Length for Each Propeller')
+plt.ylabel('Banner (m)')
+plt.title('Largest Banner Length for Each Propeller at 99 Whr')
 plt.tight_layout()
-
-# plt.figure()
-# ax1 = plt.gcf().add_subplot(111, projection='3d')
-# d = np.asarray(diameters) *39.37
-# p = np.asarray(pitches) *39.37
-# sc = ax1.scatter(d, p, rpms, c=effs, marker='o')
-# ax1.set_xlabel('Diameter (in)')
-# ax1.set_ylabel('Pitch (in)')
-# ax1.set_zlabel('RPM')
-# ax1.set_title(f'Propeller RPM at V={speed} m/s, T={drag} N')
-# cb = plt.colorbar(sc, ax=ax1, shrink=0.6, location='left')
-# plt.tight_layout()
-
-# plt.figure()
-# ax2 = plt.gcf().add_subplot(111, projection='3d')
-# sc2 = ax2.scatter(d, p, powers, c=effs, marker='o')
-# ax2.set_xlabel('Diameter (in)')
-# ax2.set_ylabel('Pitch (in)')
-# ax2.set_zlabel('Shaft Power (W)')
-# ax2.set_title(f'Propeller Shaft Power at V={speed} m/s, T={drag} N')
-# cb2 = plt.colorbar(sc2, ax=ax2, shrink=0.6, location='left')
-# plt.tight_layout()
 
 plt.show()
