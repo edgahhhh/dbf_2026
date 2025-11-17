@@ -67,18 +67,33 @@ class PropellerAnalysis():
             @param airspeed: velocity [m/s]
             @param drag: required thrust [N]
         """
-        rpm_array = np.linspace(100, 60000, 10000)
-        n_array = rpm_array * 2*np.pi/60  # rad/s
+        # rpm_array = np.linspace(100, 60000, 10000)
+        # n_array = rpm_array * 2*np.pi/60  # rad/s
 
-        threshold = 0.1  # N tolerance
-        for n in n_array:
-            # Step through speeds to find required frequency
-            thrust = self.propeller.calculate_thrust(V=airspeed, n=n)
-            if np.isclose(thrust, drag, atol=threshold):
-                return n*60/2/np.pi
-        print(f'object: {self.label} did not converge with find_rpm()...')
-        return 1    # debug value
-        
+        # threshold = 0.1  # N tolerance
+        # for n in n_array:
+        #     # Step through speeds to find required frequency
+        #     thrust = self.propeller.calculate_thrust(V=airspeed, n=n)
+        #     if np.isclose(thrust, drag, atol=threshold):
+        #         return n*60/2/np.pi
+
+        a = 1
+        b = 100000
+        fa = self.propeller.calculate_thrust(airspeed,n=a) - drag
+        for i in range(100):
+            c = (a+b)/2
+            f = self.propeller.calculate_thrust(airspeed,n=c) - drag
+            if abs(f) <= 0.01:
+                # print(f'object: {self.label}, converged with find_rpm() after {i} iterations')
+                return c*60/2/np.pi
+            elif fa * f < 0:
+                b = c
+            else:
+                a = c
+                fa = f
+        print(f'object: {self.label} did not converge with find_rpm() after {i} iterations...')
+        return 1    # debugging
+
     def analysis(self, airspeed:float, drag:float):
         """ perform analysis for propeller 
             @param airspeed [m/s]
@@ -180,7 +195,7 @@ class PropellerAnalysis():
             f = self.energy_from_banner(c) - target_energy
 
             if abs(f) <= 0.1:
-                print(f'object: {self.label}, converged with size_banner() after {i} iterations')
+                # print(f'object: {self.label}, converged with size_banner() after {i} iterations')
                 return c
             elif f == -98:
                 break
@@ -190,13 +205,13 @@ class PropellerAnalysis():
             else:
                 a = c
                 fa = f
-        print(f'object: {self.label}, did not converge with size_banner()...')
+        print(f'object: {self.label}, did not converge with size_banner() after {i} iterations...')
         return 1
 
 # Find what rpm is needed to get some thrust at some airspeed
 # Compare all the shaft powers for each propeller
 # Shaft power needed directly correlates to energy consumption
-yaml_dir = 'preliminary_design/docs/props/yaml'
+yaml_dir = 'preliminary_design/docs/props/new_yaml'
 speed = 12.51  # m/s
 drag = 23.445  # N
 
@@ -217,6 +232,7 @@ count2 = 0
 for file in tqdm(os.listdir(yaml_dir), desc='Processing propeller files...'):
     path = os.path.join(yaml_dir, file)
     prop = PropellerAnalysis(path)
+    prop.propeller.plot_original_data()
     Fn, P, eff, N = prop.analysis(speed, drag)
     if N ==1 :
         count1 += 1

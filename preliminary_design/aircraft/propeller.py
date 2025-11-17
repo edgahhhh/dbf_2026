@@ -95,5 +95,6 @@ class Propeller():
         plt.xlabel('J')
         plt.ylabel('eta')
 
+        plt.title(f'Original data for {[self.brand, self.diameter, self.pitch]}')
         plt.tight_layout()
         plt.show()
