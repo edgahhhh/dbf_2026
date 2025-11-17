@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import yaml
 from scipy.interpolate import interp1d
 
-class aircraft():
+class Aircraft():
     def __init__(self, aircraft_design_parameters, mission_parameters, course_parameters, initial_guess, banner_data, banner_stowing_config=1):
         """ Initialize aircraft model, initialize model each time you size aircraft """
         # Aircraft Parameters
@@ -298,9 +298,9 @@ class aircraft():
     def calculate_cruise_performance(self, level_power_batt, turn_power_batt, mass, cruise_speed, time_tof, time_climb, phi, gravity=9.81):
         """ 
         calculate laps, time, and energy needed for cruise 
-        @return laps
-        @return time_cruise_total
-        @return E_cruise
+            @return laps [num]
+            @return time_cruise_total [t]
+            @return E_cruise [Whr]
         """
         n = 1/np.cos(phi)
         # radius_turn = mass * cruise_speed**2 / (1/np.cos(phi)*mass*gravity)/np.sin(phi)
