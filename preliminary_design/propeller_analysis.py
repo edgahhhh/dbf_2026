@@ -56,21 +56,21 @@ class PropellerAnalysis():
             banner_data='preliminary_design/docs/banner_data.yaml')
         self.dummy_plane.size_aircraft_all_missions()
 
-    def find_rpm(self, airspeed:float, drag:float):
-        """ find rpm to meet thrust requirement at airspeed 
-        brute force solver, could use a more omtimized version for convergence
+    def find_propeller_speed(self, airspeed:float, drag:float):
+        """ find propeller speed to meet thrust requirement at airspeed 
             @param airspeed: velocity [m/s]
             @param drag: required thrust [N]
+            @return omega: propeller speed [rad/sec] 
         """
         a = 1
         b = 100000
         fa = self.propeller.calculate_thrust(airspeed,n=a) - drag
         for i in range(100):
-            c = (a+b)/2
+            c = (a+b)/2 # rad/sec
             f = self.propeller.calculate_thrust(airspeed,n=c) - drag
             if abs(f) <= 0.01:
                 # print(f'object: {self.label}, converged with find_rpm() after {i} iterations')
-                return c*60/2/np.pi
+                return c
             elif fa * f < 0:
                 b = c
             else:
@@ -87,15 +87,21 @@ class PropellerAnalysis():
             @return thrust [N]
             @return power [W]
             @return eta [1]
-            @return rpm [rev/sec]
+            @return omega [rad/sec]
         """
-        rpm = self.find_rpm(airspeed, drag=drag)
-        n = rpm * 2*np.pi/60  # rad/s
-        thrust = self.propeller.calculate_thrust(airspeed, n)
-        power = self.propeller.calculate_power(airspeed, n)
-        # eta = self.propeller.calculate_efficiency(airspeed, n)
-        eta = airspeed*thrust / power
-        return thrust, power, eta, rpm
+        omega = self.find_propeller_speed(airspeed, drag=drag)  # rad/sec
+        thrust = self.propeller.calculate_thrust(V=airspeed, n=omega)
+        power = self.propeller.calculate_power(V=airspeed, n=omega)
+        eta = self.propeller.calculate_efficiency(V=airspeed, n=omega)
+
+        # Pout=airspeed*drag
+        # Pin=power
+        # dbg_eta=Pout/Pin
+        # print(f'Propeller: {self.label}')
+        # print(f'    V:{airspeed} m/s, D:{drag} N, T:{thrust} N, rad/s:{omega}')
+        # print(f'    Pout:{Pout} W, Pin{Pin} W, data_eta{eta}, my_eta{dbg_eta}')
+        # eta = airspeed*thrust / power
+        return thrust, power, eta, omega
 
     def energy_from_banner(self, banner):
         """ Calculate energy for a banner at given airspeed
@@ -105,6 +111,15 @@ class PropellerAnalysis():
             
             @return energy_total: total energy needed for given condition [Whr]
             @return cruise_speed: cruising speed [m/s]
+            @return extras: set of extra useful information
+                [thrust_cruise,
+                power_cruise,
+                eta_cruise,
+                omega_cruise,
+                thrust_turn,
+                power_turn,
+                eta_turn,
+                omega_turn]
             """
         energy_tof = 0.55264     # Whr
         energy_climb = 0.3668    # Whr
@@ -134,16 +149,16 @@ class PropellerAnalysis():
         turn_drag = cd_total_turn * 1/2 * self.dummy_plane.rho * cruise_airspeed**(2) * self.dummy_plane.S    # N
 
         # find shaft power for cruising and turning
-        thrust_cruise, power_cruise, eta_cruise, rpm_cruise = self.analysis(
+        thrust_cruise, power_cruise, eta_cruise, omega_cruise = self.analysis(
             airspeed=cruise_airspeed,
             drag=cruise_drag
             )
-        thrust_turn, power_turn, eta_turn, rpm_turn = self.analysis(
+        thrust_turn, power_turn, eta_turn, omega_turn = self.analysis(
             airspeed=cruise_airspeed,
             drag=turn_drag
             )
-        if rpm_cruise == 1 or rpm_turn == 1:
-            return 1
+        if omega_cruise == 1 or omega_turn == 1:
+            return 1,1,1
         power_cruise_batt = power_cruise * 0.85
         power_turn_batt = power_turn * 0.85
         _, _, energy_cruise = self.dummy_plane.calculate_cruise_performance(
@@ -156,16 +171,17 @@ class PropellerAnalysis():
             phi=self.dummy_plane.phi_m3
         )
         energy_total = (energy_cruise + energy_tof + energy_climb)/0.75
-        return energy_total, cruise_airspeed
+        extras=[thrust_cruise,power_cruise,eta_cruise,omega_cruise,
+                thrust_turn,power_turn,eta_turn,omega_turn]
+        return energy_total, cruise_airspeed, extras
 
     def size_banner(self, lower_bound, upper_bound, iterations):
         """ Estimate the size of banner capable of being towed 
         Description:
             banner length was previously explicitly defined, now we can try to solve
             for a banner size that is best for some given airspeed
-
         Args:
-            
+        
             lower_bound: lower banner length bracket [m]
 
             upper_bound: upper banner length bracket [m]
@@ -174,21 +190,31 @@ class PropellerAnalysis():
             banner_length: length of banner [m]
 
             cruise_speed: cruising airspeed [m/s]
+
+            extras: set of other useful data
+                [thrust_cruise,
+                power_cruise,
+                eta_cruise,
+                omega_cruise,
+                thrust_turn,
+                power_turn,
+                eta_turn,
+                omega_turn]
         """
         target_energy = 99
         a = lower_bound
         b = upper_bound
 
-        fa, _ = self.energy_from_banner(a)
+        fa, _, _ = self.energy_from_banner(a)
         fa = fa - target_energy
         for i in range(iterations):
             c = (a+b)/2
-            f, v_cruise = self.energy_from_banner(c)
+            f, v_cruise, extras = self.energy_from_banner(c)
             f = f - target_energy
 
             if abs(f) <= 0.1:
                 # print(f'object: {self.label}, converged with size_banner() after {i} iterations')
-                return c, v_cruise
+                return c, v_cruise, extras
             elif f == -98:
                 break
             
@@ -198,4 +224,4 @@ class PropellerAnalysis():
                 a = c
                 fa = f
         print(f'object: {self.label}, did not converge with size_banner() after {i} iterations...')
-        return 1, 1
+        return 1, 1, 1

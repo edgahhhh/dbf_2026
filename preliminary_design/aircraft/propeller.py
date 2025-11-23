@@ -29,7 +29,8 @@ class Propeller():
         self.interp_cp = interp1d(self.j_data, self.cp_data, fill_value='extrapolate')
         self.interp_eta = interp1d(self.j_data, self.eta_data, fill_value='extrapolate')
 
-    def density_from_alt(self, height_asl):
+    @staticmethod
+    def density_from_alt(height_asl):
         """ calculate density from altitude 
         @param height_asl: height above sea level [m]
         """
@@ -41,20 +42,22 @@ class Propeller():
         """ Calculate advance ratio
         @param V: velocity [m/s]
         @param n: rotation rate [rad/s]
+        @return J: advance ratio [dimensionless, ref. revs]
         function converts rad/sec to rev/sec, as the propeller data uses rev/sec
         """
-        J = V / n / self.diameter * 2*np.pi
+        J = V / (n/2/np.pi * self.diameter)
         return J
 
     def calculate_thrust(self, V, n):
         """ Calculate thrust
         @param V: velocity [m/s]
         @param n: rotation rate [rad/s]
+        @return T: thrust force [N]
         """
         J = self.get_advance_ratio(V, n)
         ct = max(min(self.ct_data), min(self.interp_ct(J), max(self.ct_data)))
         D = self.diameter
-        T = ct * self.rho * (n/2/np.pi)**2 * D**4
+        T = ct * self.rho * (n/2/np.pi)**(2) * D**(4)
         return T
 
     def calculate_power(self, V, n):
@@ -65,7 +68,7 @@ class Propeller():
         J = self.get_advance_ratio(V, n)
         cp = max(min(self.cp_data), min(self.interp_cp(J), max(self.cp_data)))
         D = self.diameter
-        P = cp * self.rho * (n/2/np.pi)**3 * D**5
+        P = cp * self.rho * (n/2/np.pi)**(3) * D**(5)
         return P
 
     def calculate_efficiency(self, V, n):

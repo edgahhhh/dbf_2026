@@ -7,6 +7,6 @@ from scipy.interpolate import interp1d
 from propeller import Propeller
 
 class Aircraft():
-    """ Aircraft """
-    def __init__(self):
+    """ Aircraft class for preliminary design use """
+    def __init__(self, aircraft_info, propulsion_info, mission2_info, mission3_info):
         return print('nice')
