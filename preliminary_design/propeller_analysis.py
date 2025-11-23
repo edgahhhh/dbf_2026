@@ -2,13 +2,8 @@
 # pylint: disable=invalid-name
 # pylint: disable=too-many-public-methods
 # pylint: disable=unused-import
-import os
-from tqdm import tqdm
 import numpy as np
-import yaml
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d
-from mpl_toolkits.mplot3d import Axes3D
 from aircraft.propeller import Propeller
 from aircraft.simple_plane import Aircraft
 plt.rcParams['axes.grid'] = True
@@ -67,16 +62,6 @@ class PropellerAnalysis():
             @param airspeed: velocity [m/s]
             @param drag: required thrust [N]
         """
-        # rpm_array = np.linspace(100, 60000, 10000)
-        # n_array = rpm_array * 2*np.pi/60  # rad/s
-
-        # threshold = 0.1  # N tolerance
-        # for n in n_array:
-        #     # Step through speeds to find required frequency
-        #     thrust = self.propeller.calculate_thrust(V=airspeed, n=n)
-        #     if np.isclose(thrust, drag, atol=threshold):
-        #         return n*60/2/np.pi
-
         a = 1
         b = 100000
         fa = self.propeller.calculate_thrust(airspeed,n=a) - drag
@@ -119,25 +104,28 @@ class PropellerAnalysis():
             @param cruise_airspeed [m/s]
             
             @return energy_total: total energy needed for given condition [Whr]
+            @return cruise_speed: cruising speed [m/s]
             """
         energy_tof = 0.55264     # Whr
         energy_climb = 0.3668    # Whr
         t_tof = 3.4         # s
-        t_climb = 1.385  
-        mass_no_banner = self.dummy_plane.mass_m3_gross - self.dummy_plane.mass_banner
+        t_climb = 1.385     # s
+        mass_no_banner = self.dummy_plane.mass_m3_gross-self.dummy_plane.mass_banner
         area_banner = banner**(2)/5 # m^2
         mass_banner = area_banner * 0.0359  # kg, linear trend w/ area
         mass_total = mass_no_banner + mass_banner
-        cruise_airspeed = 1.2*np.sqrt(mass_total*9.81/(1/2*self.dummy_plane.rho*self.dummy_plane.S*self.dummy_plane.CLmax))
-
+        cruise_airspeed = 1.2*np.sqrt(mass_total*9.81 / (
+            1/2*self.dummy_plane.rho*self.dummy_plane.S*self.dummy_plane.CLmax))
 
         # find cl at cruise current config
-        cl_cruise = mass_total*9.81 / (1/2*self.dummy_plane.rho*cruise_airspeed**(2)*self.dummy_plane.S)
+        cl_cruise = mass_total*9.81 / (
+            (1/2*self.dummy_plane.rho*cruise_airspeed**(2)*self.dummy_plane.S))
 
         # find drag of banner at cruise and turn
-        # cd_total = 0.081644+cd_banner   # from cd_cruise-cd_banner for conceptual_sizing results
         temp_cd = self.dummy_plane.banner_cd_interp_fun(banner)
-        cd_banner = max( min(self.dummy_plane.banner_data_cd), min(temp_cd, max(self.dummy_plane.banner_data_cd)))*area_banner/self.dummy_plane.S
+        cd_banner = max( min(self.dummy_plane.banner_data_cd), 
+                        min(temp_cd, max(self.dummy_plane.banner_data_cd)))*(
+                            area_banner/self.dummy_plane.S)
 
         cd_total_cruise = self.dummy_plane.CD_m3_cruise - self.dummy_plane.CD_m3_banner_cruise  + cd_banner + self.dummy_plane.k*cl_cruise**(2)
         cd_total_turn = self.dummy_plane.CD_m3_cruise - self.dummy_plane.CD_m3_banner_cruise  + cd_banner + self.dummy_plane.k*(self.dummy_plane.n_m3*cl_cruise)**(2)
@@ -168,35 +156,39 @@ class PropellerAnalysis():
             phi=self.dummy_plane.phi_m3
         )
         energy_total = (energy_cruise + energy_tof + energy_climb)/0.75
-        return energy_total
+        return energy_total, cruise_airspeed
 
-#
-    def size_banner(self, cruise_airspeed, lower_bound, upper_bound, iterations):
+    def size_banner(self, lower_bound, upper_bound, iterations):
         """ Estimate the size of banner capable of being towed 
-            description:
+        Description:
             banner length was previously explicitly defined, now we can try to solve
             for a banner size that is best for some given airspeed
 
-            @param cruise_airspeed: cruising airspeed [m/s]
+        Args:
+            
+            lower_bound: lower banner length bracket [m]
 
-            @param lower_bound: lower banner length bracket [m]
+            upper_bound: upper banner length bracket [m]
 
-            @param upper_bound: upper banner length bracket [m]
+        Returns:
+            banner_length: length of banner [m]
 
-            @return banner_length: length of banner [m]
+            cruise_speed: cruising airspeed [m/s]
         """
         target_energy = 99
         a = lower_bound
         b = upper_bound
 
-        fa = self.energy_from_banner(a) - target_energy
+        fa, _ = self.energy_from_banner(a)
+        fa = fa - target_energy
         for i in range(iterations):
             c = (a+b)/2
-            f = self.energy_from_banner(c) - target_energy
+            f, v_cruise = self.energy_from_banner(c)
+            f = f - target_energy
 
             if abs(f) <= 0.1:
                 # print(f'object: {self.label}, converged with size_banner() after {i} iterations')
-                return c
+                return c, v_cruise
             elif f == -98:
                 break
             
@@ -206,81 +198,4 @@ class PropellerAnalysis():
                 a = c
                 fa = f
         print(f'object: {self.label}, did not converge with size_banner() after {i} iterations...')
-        return 1
-
-# Find what rpm is needed to get some thrust at some airspeed
-# Compare all the shaft powers for each propeller
-# Shaft power needed directly correlates to energy consumption
-yaml_dir = 'preliminary_design/docs/props/new_yaml'
-speed = 12.51  # m/s
-drag = 23.445  # N
-
-# Arrays for analysis
-props = []
-labels = []
-diameters = []
-pitches = []
-thrusts = []
-powers = []
-effs = []
-rpms = []
-banner_lengths = []
-
-count1 = 0
-count2 = 0
-
-for file in tqdm(os.listdir(yaml_dir), desc='Processing propeller files...'):
-    path = os.path.join(yaml_dir, file)
-    prop = PropellerAnalysis(path)
-    prop.propeller.plot_original_data()
-    Fn, P, eff, N = prop.analysis(speed, drag)
-    if N ==1 :
-        count1 += 1
-        continue
-    l = prop.size_banner(
-        cruise_airspeed=speed,
-        lower_bound=2,
-        upper_bound=20,
-        iterations=20
-        )
-    if l == 1:
-        count2 += 1
-        continue
-
-    props.append(prop)
-    labels.append(prop.label)
-    diameters.append(prop.propeller.diameter)
-    pitches.append(prop.propeller.pitch)
-    thrusts.append(Fn)
-    powers.append(P)
-    effs.append(eff)
-    rpms.append(N)
-    banner_lengths.append(l)
-
-print('---------------------\n',
-        '  Analysis Complete  \n',
-        f'Propeller analysis didnt converge {count1} times \n',
-        f'banner analysis didnt converge {count2} times above that')
-
-plt.figure()
-plt.bar(labels, powers)
-plt.xticks(rotation=45, ha='right')
-plt.ylabel('Shaft Power (W)')
-plt.title(f'Propeller Shaft Power at V={speed} m/s, T={drag} N')
-plt.tight_layout()
-
-plt.figure()
-plt.bar(labels, effs)
-plt.xticks(rotation=45, ha='right')
-plt.ylabel('Propeller Efficiency')
-plt.title(f'Propeller Efficiency at V={speed} m/s, T={drag} N')
-plt.tight_layout()
-
-plt.figure()
-plt.bar(labels, banner_lengths)
-plt.xticks(rotation=45, ha='right')
-plt.ylabel('Banner (m)')
-plt.title('Largest Banner Length for Each Propeller at 99 Whr')
-plt.tight_layout()
-
-plt.show()
+        return 1, 1
