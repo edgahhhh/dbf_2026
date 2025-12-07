@@ -10,7 +10,7 @@ plt.rcParams['axes.grid'] = True
 
 class PropellerAnalysis():
     """ object for finding adequate props """
-    def __init__(self, propeller_info):
+    def __init__(self, propeller_info,banner_path='preliminary_design/docs/banner_data.yaml'):
         """ Initialize object for each propeller """
         self.propeller = Propeller(propeller_info)
         self.label = f"{self.propeller.brand}_{self.propeller.diameter*39.37:.0f}x{self.propeller.pitch*39.37:.0f}"
@@ -53,7 +53,7 @@ class PropellerAnalysis():
             mission_parameters,
             course_parameters,
             initial_guess,
-            banner_data='preliminary_design/docs/banner_data.yaml')
+            banner_data=banner_path)
         self.dummy_plane.size_aircraft_all_missions()
 
     def find_propeller_speed(self, airspeed:float, drag:float):
@@ -107,7 +107,6 @@ class PropellerAnalysis():
         """ Calculate energy for a banner at given airspeed
         function uses the aircraft object solved at __init__()
             @param banner: length of banner [m]
-            @param cruise_airspeed [m/s]
             
             @return energy_total: total energy needed for given condition [Whr]
             @return cruise_speed: cruising speed [m/s]
@@ -119,7 +118,9 @@ class PropellerAnalysis():
                 thrust_turn,
                 power_turn,
                 eta_turn,
-                omega_turn]
+                omega_turn,
+                turn_drag,
+                tof_speed]
             """
         energy_tof = 0.55264     # Whr
         energy_climb = 0.3668    # Whr
@@ -131,7 +132,9 @@ class PropellerAnalysis():
         mass_total = mass_no_banner + mass_banner
         cruise_airspeed = 1.2*np.sqrt(mass_total*9.81 / (
             1/2*self.dummy_plane.rho*self.dummy_plane.S*self.dummy_plane.CLmax))
-
+        tof_speed= 1.1*np.sqrt(mass_total*9.81 / (
+            1/2*self.dummy_plane.rho*self.dummy_plane.S*self.dummy_plane.CLmax))
+        
         # find cl at cruise current config
         cl_cruise = mass_total*9.81 / (
             (1/2*self.dummy_plane.rho*cruise_airspeed**(2)*self.dummy_plane.S))
@@ -172,10 +175,11 @@ class PropellerAnalysis():
         )
         energy_total = (energy_cruise + energy_tof + energy_climb)/0.75
         extras=[thrust_cruise,power_cruise,eta_cruise,omega_cruise,
-                thrust_turn,power_turn,eta_turn,omega_turn]
+                thrust_turn,power_turn,eta_turn,omega_turn,
+                turn_drag, tof_speed]
         return energy_total, cruise_airspeed, extras
 
-    def size_banner(self, lower_bound, upper_bound, iterations):
+    def size_banner(self, lower_bound=1, upper_bound=20, iterations=20):
         """ Estimate the size of banner capable of being towed 
         Description:
             banner length was previously explicitly defined, now we can try to solve
@@ -199,9 +203,11 @@ class PropellerAnalysis():
                 thrust_turn,
                 power_turn,
                 eta_turn,
-                omega_turn]
+                omega_turn,
+                turn_drag,
+                tof_speed]
         """
-        target_energy = 99
+        target_energy = 99.9
         a = lower_bound
         b = upper_bound
 

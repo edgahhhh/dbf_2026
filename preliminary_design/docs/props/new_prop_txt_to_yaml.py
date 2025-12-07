@@ -43,6 +43,10 @@ def text_to_yaml(file_one, file_two):
 
     prop, rpm, diam, pit = dissect_name(name_one)
 
+    if float(diam) >= 100:
+        # Divide by 10 since some decimals get missed
+        diam=str(float(diam)/10)
+
     file_out = os.path.join(yaml_dir, prop + '_' + diam + 'x' + pit + '_' + rpm + '.yaml')
 
     df_one = pd.read_csv(file_one, sep=r'\s+')

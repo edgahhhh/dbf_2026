@@ -1,6 +1,6 @@
 brand: ancf
 geometry:
-  diameter: 3.1750063500127004
+  diameter: 0.31750063500127
   pitch: 0.15240030480060962
   units: m, rev, s
 performance_data:

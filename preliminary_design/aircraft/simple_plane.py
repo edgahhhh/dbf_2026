@@ -207,7 +207,7 @@ class Aircraft():
     def fuselage_mass_from_empty_no_fus(self, mass_empty_no_fuselage):
         """ calculate mass of fuselage in kg
         @param mass_empty_no_fuselage: empty mass - fuselage mass """
-        me = mass_empty_no_fuselage/(1-0.22)
+        me = mass_empty_no_fuselage/(10-0.22)
         return(me*0.22)
 
     def calculate_fuselage_drag(self, reynolds_number, S_wet):
@@ -400,12 +400,12 @@ class Aircraft():
         for i in range(10):
             self.iteration_all.append(i)
             if i == 0:
-                """ initial guess """
+                # initial guess
                 self.mass_m2_battery.append(self.mass_m2_battery_initial_guess)
                 self.mass_m3_battery.append(self.mass_m3_battery_inital_guess)
                 self.mass_motor.append(self.mass_motor_initial_guess)
             elif i > 0:
-                """ refining guess """
+                # refining guess
                 self.mass_m2_battery.append(self.battery_mass_from_energy(self.E_battery_m2_list[i-1]))
                 self.mass_m3_battery.append(self.battery_mass_from_energy(self.E_battery_m3_list[i-1]))
                 self.mass_motor.append(self.motor_mass_from_power(self.P_all_motor[i-1]))

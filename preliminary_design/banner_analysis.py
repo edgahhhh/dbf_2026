@@ -12,6 +12,7 @@ from propeller_analysis import PropellerAnalysis
 # Compare all the shaft powers for each propeller
 # Shaft power needed directly correlates to energy consumption
 yaml_dir = 'preliminary_design/docs/props/new_yaml'
+banner_data= 'preliminary_design/docs/isaac_banner_data_1.yaml'
 speed = 12.51  # m/s
 drag = 23.445  # N
 
@@ -30,13 +31,15 @@ new_effs_cruise=[]
 new_powers_cruise=[]
 new_effs_turn=[]
 new_powers_turn=[]
+omega_turn=[]
+turn_drag=[]
 
 count1 = 0
 count2 = 0
 sanity_count = 0
 for file in tqdm(os.listdir(yaml_dir), desc='Processing propeller files...'):
     path = os.path.join(yaml_dir, file)
-    prop = PropellerAnalysis(path) 
+    prop = PropellerAnalysis(path,banner_path=banner_data) 
     if sanity_count == 0:
         print('======================= \n',
               '  sanity check here \n\n',)
@@ -73,6 +76,8 @@ for file in tqdm(os.listdir(yaml_dir), desc='Processing propeller files...'):
     new_powers_cruise.append(data[1])
     new_effs_turn.append(data[6])
     new_powers_turn.append(data[5])
+    omega_turn.append(data[7])
+    turn_drag.append(data[8])
 
 # print('---------------------\n',
 #         '  Analysis Complete  \n',
@@ -138,7 +143,14 @@ a24.set_xticklabels(labels=labels)
 f2.tight_layout()
 
 # Revisiting propeller stuff
-f3=plt.figure()
+# f3=plt.figure()
 
+f4=plt.figure()
+a41=f4.add_subplot(1,1,1)
+a41.bar(labels,turn_drag)
+plt.setp(a41.get_xticklabels(),rotation=45, ha='right')
+
+for prop, omega in zip(props, omega_turn):
+    print(f'propeller: {prop.label}, w/ rpm: {omega/2/np.pi*60}')
 
 plt.show()
