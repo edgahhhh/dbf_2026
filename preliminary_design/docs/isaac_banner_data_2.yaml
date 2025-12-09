@@ -1,0 +1,10 @@
+# working file still
+# drag coefficient as a function of reynolds number of banner
+info:
+  - units: 'SI'
+Re:
+  - 1
+  - 1.01
+CD: 
+  - 0.0225
+  - 0.0223

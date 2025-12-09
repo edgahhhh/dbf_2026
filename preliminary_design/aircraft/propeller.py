@@ -10,24 +10,28 @@ import matplotlib.pyplot as plt
 
 # Integrate into a revamped aircraft model at some point
 class Propeller():
-    """ Propeller model"""
-    def __init__(self, propeller_info):
+    """ Propeller class to model propellers using a yaml data file"""
+    def __init__(self, propeller_info, altitude=400.0):
+        """ load in propeller data from yaml file 
+            @param propeller_info: path to propeller yaml file
+            @param altitude: altitude above sea level [m]
+        """
         with open(propeller_info, 'r') as file:
-            self.prop_info = yaml.safe_load(file)
-        self.brand = self.prop_info['brand']    # string
-        self.diameter = self.prop_info['geometry']['diameter']  # m
-        self.pitch = self.prop_info['geometry']['pitch']    # m
-        self.j_data = self.prop_info['performance_data']['J']   # dimensionless (1/rev)
-        self.ct_data = self.prop_info['performance_data']['CT'] # dimensionless
-        self.cp_data = self.prop_info['performance_data']['CP'] # dimensionless
-        self.eta_data = self.prop_info['performance_data']['eta']   # dimensionless
+            self._prop_info = yaml.safe_load(file)
+        self.brand = self._prop_info['brand']    # string
+        self.diameter = self._prop_info['geometry']['diameter']  # m
+        self.pitch = self._prop_info['geometry']['pitch']    # m
+        self._j_data = self._prop_info['performance_data']['J']   # dimensionless (1/rev)
+        self._ct_data = self._prop_info['performance_data']['CT'] # dimensionless
+        self._cp_data = self._prop_info['performance_data']['CP'] # dimensionless
+        self._eta_data = self._prop_info['performance_data']['eta']   # dimensionless
 
-        self.rho = self.density_from_alt(400)   # density at 400m altitude
+        self._rho = self.density_from_alt(altitude)   # density at 400m altitude
 
         # Interpolators for data
-        self.interp_ct = interp1d(self.j_data, self.ct_data, fill_value='extrapolate')
-        self.interp_cp = interp1d(self.j_data, self.cp_data, fill_value='extrapolate')
-        self.interp_eta = interp1d(self.j_data, self.eta_data, fill_value='extrapolate')
+        self._interp_ct = interp1d(self._j_data, self._ct_data, fill_value='extrapolate')
+        self._interp_cp = interp1d(self._j_data, self._cp_data, fill_value='extrapolate')
+        self._interp_eta = interp1d(self._j_data, self._eta_data, fill_value='extrapolate')
 
     @staticmethod
     def density_from_alt(height_asl):
@@ -40,61 +44,62 @@ class Propeller():
 
     def get_advance_ratio(self, V, n):
         """ Calculate advance ratio
-        @param V: velocity [m/s]
-        @param n: rotation rate [rad/s]
-        @return J: advance ratio [dimensionless, ref. revs]
-        function converts rad/sec to rev/sec, as the propeller data uses rev/sec
+            @param V: velocity [m/s]
+            @param n: rotation rate [rad/s]
+            @return J: advance ratio [dimensionless, ref. revs]
         """
         J = V / (n/2/np.pi * self.diameter)
         return J
 
     def calculate_thrust(self, V, n):
-        """ Calculate thrust
-        @param V: velocity [m/s]
-        @param n: rotation rate [rad/s]
-        @return T: thrust force [N]
+        """ Calculate thrust with saturation
+            @param V: velocity [m/s]
+            @param n: rotation rate [rad/s]
+            @return T: thrust force [N]
         """
         J = self.get_advance_ratio(V, n)
-        ct = max(min(self.ct_data), min(self.interp_ct(J), max(self.ct_data)))
+        ct = max(min(self._ct_data), min(self._interp_ct(J), max(self._ct_data)))
         D = self.diameter
-        T = ct * self.rho * (n/2/np.pi)**(2) * D**(4)
+        T = ct * self._rho * (n/2/np.pi)**(2) * D**(4)
         return T
 
     def calculate_power(self, V, n):
-        """ Calculate power
-        @param V: velocity [m/s]
-        @param n: rotation rate [rad/s]
+        """ Calculate power with saturation
+            @param V: velocity [m/s]
+            @param n: rotation rate [rad/s]
+            @return P: power [W]
         """
         J = self.get_advance_ratio(V, n)
-        cp = max(min(self.cp_data), min(self.interp_cp(J), max(self.cp_data)))
+        cp = max(min(self._cp_data), min(self._interp_cp(J), max(self._cp_data)))
         D = self.diameter
-        P = cp * self.rho * (n/2/np.pi)**(3) * D**(5)
+        P = cp * self._rho * (n/2/np.pi)**(3) * D**(5)
         return P
 
     def calculate_efficiency(self, V, n):
-        """ Calculate efficiency
-        @param V: velocity [m/s]
-        @param n: rotation rate [rad/s]
+        """ Calculate efficiency with saturation
+            @param V: velocity [m/s]
+            @param n: rotation rate [rad/s]
+            @return eta: efficiency [dimensionless]
         """
         J = self.get_advance_ratio(V, n)
-        eta = max(min(self.eta_data), min(self.interp_eta(J), max(self.eta_data)))
+        eta = max(min(self._eta_data), min(self._interp_eta(J), max(self._eta_data)))
         return eta
 
     def plot_original_data(self):
         """ Plot the original propeller data """
         plt.figure()
         plt.subplot(3,1,1)
-        plt.plot(self.j_data, self.ct_data, 'o-')
+        plt.plot(self._j_data, self._ct_data, 'o-')
         plt.xlabel('J')
         plt.ylabel('CT')
 
         plt.subplot(3,1,2)
-        plt.plot(self.j_data, self.cp_data, 'o-')
+        plt.plot(self._j_data, self._cp_data, 'o-')
         plt.xlabel('J')
         plt.ylabel('CP')
 
         plt.subplot(3,1,3)
-        plt.plot(self.j_data, self.eta_data, 'o-')
+        plt.plot(self._j_data, self._eta_data, 'o-')
         plt.xlabel('J')
         plt.ylabel('eta')
 
