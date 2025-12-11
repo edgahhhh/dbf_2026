@@ -12,10 +12,18 @@ from propeller import Propeller
 
 class Banner:
     """ Banner class for use in analyzing the banner in flight """
-    def __init__(self, banner_info, banner_length, aspect_ratio=5.0):
+    def __init__(self,
+                banner_info,
+                banner_length,
+                banner_density=913.44,
+                banner_thickness=0.0000254,
+                aspect_ratio=5.0,
+                ):
         """ load in banner data from yaml file
             @param banner_info: path to banner yaml file
             @param banner_length: length of banner [m]
+            @param banner_density [kg/m^3]
+            @param banner_density [m]
             @param aspect_ratio: aspect ratio of banner
         """
         with open(banner_info, 'r') as file:
@@ -25,21 +33,204 @@ class Banner:
         self._cd_interp=interp1d(
             self._reynolds_data, self._cd_data, fill_value='extrapolate'
         )
+        self.thickness=banner_thickness
         self.length=banner_length
         self.aspect_ratio=aspect_ratio
-        self.area=self.length**2 / self.aspect_ratio
+        self.height=banner_length/aspect_ratio
 
-    def get_drag_coefficient(self, reynolds_number, ref_area):
+        # banner calculations
+        self._banner_rho=banner_density #kg/m^3
+        self._volume=self.thickness*self.length**(2)/self.aspect_ratio
+        self.mass=self._banner_rho*self._volume #mass in kg
+        self.area=self.length**2 / self.aspect_ratio    # towing config
+        self.area_frontal=self._volume/self.height  # stowed config
+
+        # Other stuff needed
+        self._rho=density_from_alt(height_asl=400.0)    # air density kg/m^3
+
+    def get_drag_coefficient(self, airspeed, ref_area):
         """ get saturated drag coefficient from reynolds number 
             @param reynolds_number: reynolds number of banner in flight
             @param ref_area: reference area for coefficient [m^2]
             @return c_d: drag coefficient [dimensionless]
         """
+        re = reynolds_number(
+            rho=self._rho,
+            airspeed=airspeed,
+            length_wet=self.length
+        )
         cd_non_ref=max(
             min(self._cd_data), min(
-                self._cd_interp(reynolds_number), max(self._cd_data)))
+                self._cd_interp(re), max(self._cd_data)))
         cd_ref = cd_non_ref * (self.area / ref_area)
         return cd_ref
+
+
+    def get_stowed_drag_coefficient(self, ref_area):
+        """" get drag coefficient for banner while its stowed """
+        cds=1.98    # flat frontal area
+        cd=cds*self.area_frontal/ref_area
+        return cd
+
+# figure out how we can split up mission coefficients into the dynamics object???
+# idk tbh, maybe only leave the polar in here, as well as some equations that may bloat
+# other stuff....
+# Create an interpolator for polar vs aoa, cd_fus vs Re and cd_banner vs Re?
+class Dynamics:
+    """ Dynamics class for storing info from given drag polar 
+        CL
+        ^               
+        |           __=__
+        |         [       ]
+        |      [            ]
+        |    [              ]
+        |  [                +
+        | [
+        |+
+        |------------------------> alpha"""
+    def __init__(self,
+                ref_area,
+                aspect_ratio,
+                polar_info,
+                fus_length,
+                fus_diameter,
+                banner_info,
+                banner_length,
+                banner_aspect_ratio=5.00,
+                crud_factor=0.1
+                ):
+        """ Load in drag polar and estimate all other drag 
+        Assume that only wing and tail drag is given in the polar
+        without a crud factor """
+        self._ref_area=ref_area
+        self._ar=aspect_ratio
+        self._k = 1/np.pi/self._ar/0.9
+        self._rho=density_from_alt(height_asl=400.0)
+        self._crud=crud_factor
+        # Load in polar data and make interpolators
+        with open(polar_info, 'r') as file:
+            self._polar_info=yaml.safe_load(file)
+        self._cl_data=self._polar_info.get('cL')
+        self._cd_data=self._polar_info.get('cD')
+        self._aoa_data=self._polar_info.get('aoa')
+        self._cl_interp=interp1d(self._aoa_data,self._cl_data)
+        self._cd_interp=interp1d(self._aoa_data,self._cd_data)
+        self._cd_from_cl_interp=interp1d(self._cl_data,self._cd_data)
+
+        # Load in fuselage info
+        self._fus_length=fus_length
+        self._fus_diameter=fus_diameter
+        self._fus_fineness=fus_length/fus_diameter
+        self._fus_wet_area=3/4*np.pi*fus_diameter*fus_length
+
+        # Create banner object here? for now yes
+        self._banner=Banner(
+            banner_info=banner_info,
+            banner_length=banner_length,
+            aspect_ratio=banner_aspect_ratio
+        )
+
+    def get_drag_coefficient(self,airspeed, aoa_plane, load_factor, stowed=False):
+        """ Get all drag coefficients and apply a crud factor """
+        # get banner cd
+        if stowed is False:
+            cd_banner=self._banner.get_drag_coefficient(
+                airspeed=airspeed,
+                ref_area=self._ref_area
+            )
+        else:
+            cd_banner=self._banner.get_stowed_drag_coefficient(
+                ref_area=self._ref_area)
+        # get fuselage cd
+        cd_fus=self.fuselage_drag(airspeed=airspeed)
+        # get cd and cl of wing+tail
+        cl_wing_tail, cd_wing_tail=self.wing_tail_dynamics(aoa=aoa_plane)
+
+        cdi=self.induced_drag(
+            cl=cl_wing_tail,
+            load_factor=load_factor,
+        )
+        cd=cd_banner+cd_fus+cd_wing_tail+cdi
+        cd=cd/self._crud
+        return cd
+
+    def get_drag_coefficients_legacy(self,airspeed,weight,load_factor,stowed=False):
+        """ Get all drag coefficients and apply crud factor 
+        legacy: not using aoa (which is more of a control use case)
+        """
+        # get banner cd
+        if stowed is False:
+            cd_banner=self._banner.get_drag_coefficient(
+                airspeed=airspeed,
+                ref_area=self._ref_area
+            )
+        else:
+            cd_banner=self._banner.get_stowed_drag_coefficient(
+                ref_area=self._ref_area
+            )
+        # get fuselage cd
+        cd_fus=self.fuselage_drag(airspeed=airspeed)
+        # get cd of wing+tail
+        cl_wing_tail=load_factor*weight*2/self._rho/airspeed**(2)/self._ref_area
+        cd_wing_tail=max(
+            min(self._cd_data), min(
+                self._cd_from_cl_interp(cl_wing_tail), max(self._cd_data)
+            )
+        )
+        cdi=self.induced_drag(cl=cl_wing_tail, load_factor=load_factor)
+        cd=cd_banner+cd_fus+cd_wing_tail+cdi
+        cd=cd/self._crud
+        return cd
+
+
+    def wing_tail_dynamics(self,aoa):
+        """ get saturated cL and cD from wing/tail polar 
+            @param aoa: angle of attack of plane (deg)
+            @return cl: cL of wing/tail
+            @return cd: cD of wing/tail
+        """
+        # cd_non_ref=max(
+        #     min(self._cd_data), min(
+        #         self._cd_interp(re), max(self._cd_data)))
+        cl=max(
+            min(self._cl_data), min(
+                self._cl_interp(aoa), max(self._cl_data)
+            )
+        )
+        cd=max(
+            min(self._cd_data), min(
+                self._cd_interp(aoa), max(self._cd_data)
+            )
+        )
+        return cl, cd
+
+    def induced_drag(self,cl,load_factor):
+        """ calculate the induced drag for some loading factor """
+        # TODO: check if XFLR5 does induced drag already for the polar
+        cdi=(load_factor*cl)**(2)*self._k
+        return cdi
+
+    def landing_gear_drag(self):
+        """ calculate the cD of landing gear """
+
+
+    def fuselage_drag(self,airspeed):
+        """ calculate the fuselage drag coefficient by estimating
+        it as a laminar flow 
+            @param airspeed: true airspeed [m/s]
+        """
+        # find the skin friction coefficient for the fuselage
+        re_fuselage = reynolds_number(
+            rho=self._rho,
+            airspeed=airspeed,
+            length_wet=self._fus_length)
+        # TODO: account for transition and cutoff
+        # estimate cd as laminar
+        cf = 1.328/np.sqrt(re_fuselage)
+        # cd=1/S(cf*ff*Swet*IF) assume no interference
+        cd=self._fus_wet_area/self.ref_area*(
+            cf*(1+self.fuselage.fineness**(-1.5))+0.11*self.fuselage.fineness**(-2))
+        return cd
 
 aircraft_info={
     'wing_info':{   # wing info
@@ -67,7 +258,7 @@ aircraft_info={
         'boom_length':0.0, # distance from aft fus to h-tail AC
         'boom_width':0.0,  # width of tail boom
     },
-    'drag_info':'path/to/drag_polar.yaml',
+    'polar_info':'path/to/drag_polar.yaml',
     'empty_mass': 0.0,  # empty mass of the aircraft (no payload + no batts)
 }
 
@@ -78,7 +269,7 @@ class BaseAircraft:
                 aircraft_info:dict,
                 mission2_info:dict,
                 mission3_info:dict,
-                altitude=0.0):
+                altitude=400.0):
         """ initialize base aircraft model.
         Refer to dictionaries in source file for help in syntax.
             @param aircraft_info: dict with basic aircraft info
@@ -123,10 +314,6 @@ class BaseAircraft:
         self.empennage.boom_width=self._aircraft_info.get('empennage_info',{}).get('boom_width', 0.0)
         self.ref_area=self.wing.area
 
-        self._drag_info = self._aircraft_info.get(
-            'drag_info', 'path/to/drag_polar.yaml')
-        self.empty_mass = self._aircraft_info.get('empty_mass', 0.0)
-
         # Load mission 2 info
         self._m2_info = mission2_info
         self._m2_prop_info= self._m2_info.get('propulsion_info', None)
@@ -144,6 +331,21 @@ class BaseAircraft:
             propeller_info=self._m3_prop_info, altitude=altitude)
         self._m3_banner_info = self._m3_info.get(
             'banner_info', 'path/to/banner.yaml')
+        
+        # Create objects for the dynamics of the aircraft
+        self._polar_info = self._aircraft_info.get(
+            'polar_info', 'path/to/drag_polar.yaml')
+        
+        self.dynamics=Dynamics(
+            polar_info=self._polar_info,
+            banner_info=self._m3_banner_info,
+            banner_length=self._m3_info.get('banner_length', 0.0),
+            banner_aspect_ratio=5.0
+        )
+
+        self.empty_mass = self._aircraft_info.get('empty_mass', 0.0)
+
+
         self.banner=Banner(
             banner_info=self._m3_banner_info,
             banner_length=self._m3_info.get('banner_length',0.0),
@@ -157,42 +359,36 @@ class BaseAircraft:
         # Calculate density from altitude
         self.rho = self.density_from_alt(altitude)  # sea level density by default
         self._altitude=altitude
+    
 
-    def density_from_alt(self, height_asl):
-        """ calculate density from altitude """
-        theta = 1 + (-0.000022558) * height_asl
-        rho = 1.225 * (theta**4.2561)
-        return rho
+    def takeoff_speed(self, mass):
+        return None
+        
 
-    def _temp_from_alt(self, height_asl):
-        """ calculate temperature from altitude """
-        theta = 1 + (-0.000022558) * height_asl
-        temp = 288.15 * theta
-        return temp
 
-    def reynolds_number(self, airspeed, length_wet):
-        """ calculate the reynolds number in air from free-stream """
-        # mu = 18*10**(-6) # Pa*s
-        temp=self._temp_from_alt(height_asl=self._altitude)
-        mu=1.458*10**(-6)*(temp**(1.5)/(110.4+temp))
-        re = self.rho * airspeed * length_wet / mu
-        return re
+    def take_off_performance(self):
+        """ estimate the performance at takeoff """
+        return None
 
-    def _fuse_wet_area(self):
-        """ calculate the wetted area of the fuselage """
-        s_wet=3/4*np.pi*self.fuselage.diameter*self.fuselage.length
-        return s_wet
 
-    def fuselage_drag(self, airspeed):
-        """ calculate the fuselage drag coefficient """
-        # find the skin friction coefficient for the fuselage
-        re_fuselage = self.reynolds_number(
-            airspeed=airspeed,
-            length_wet=self.fuselage.length)
-        # TODO: account for transition and cutoff
-        # estimate cd as laminar
-        cf = 1.328/np.sqrt(re_fuselage)
-        # cd=1/S(cf*ff*Swet*IF)
-        cd=1/self.ref_area*(
-            cf*(1+1/self.fuselage.fineness)+0.11*(1/self.fuselage.fineness)**(2))
-        return cd
+
+# Local functions for all objects?
+def density_from_alt(height_asl):
+    """ calculate density from altitude """
+    theta = 1 + (-0.000022558) * height_asl
+    rho = 1.225 * (theta**4.2561)
+    return rho
+
+def temp_from_alt(height_asl):
+    """ calculate temperature from altitude """
+    theta = 1 + (-0.000022558) * height_asl
+    temp = 288.15 * theta
+    return temp
+
+def reynolds_number(rho, airspeed, length_wet, height_asl=400.0):
+    """ calculate the reynolds number in air from free-stream """
+    # mu = 18*10**(-6) # Pa*s
+    temp=temp_from_alt(height_asl=height_asl)
+    mu=1.458*10**(-6)*a(temp**(1.5)/(110.4+temp))
+    re = rho * airspeed * length_wet / mu
+    return re
