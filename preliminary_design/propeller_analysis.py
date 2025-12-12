@@ -93,14 +93,6 @@ class PropellerAnalysis():
         thrust = self.propeller.calculate_thrust(V=airspeed, n=omega)
         power = self.propeller.calculate_power(V=airspeed, n=omega)
         eta = self.propeller.calculate_efficiency(V=airspeed, n=omega)
-
-        # Pout=airspeed*drag
-        # Pin=power
-        # dbg_eta=Pout/Pin
-        # print(f'Propeller: {self.label}')
-        # print(f'    V:{airspeed} m/s, D:{drag} N, T:{thrust} N, rad/s:{omega}')
-        # print(f'    Pout:{Pout} W, Pin{Pin} W, data_eta{eta}, my_eta{dbg_eta}')
-        # eta = airspeed*thrust / power
         return thrust, power, eta, omega
 
     def energy_from_banner(self, banner):

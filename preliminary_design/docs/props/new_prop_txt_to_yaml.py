@@ -8,7 +8,7 @@ import numpy as np
 # pylint: disable=invalid-name
 # pylint: disable=unspecified-encoding
 # pylint: disable=too-many-locals
-# pylint: diable=line-too-long
+# pylint: disable=line-too-long
 
 def dissect_name(file_path):
     """ Dissect the file name into the proper parts 
