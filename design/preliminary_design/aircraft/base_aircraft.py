@@ -283,7 +283,6 @@ class Dynamics:
             cf*(1+self._fus_fineness**(-1.5))+0.11*self._fus_fineness**(-2))
         return cd
 
-
 # TODO: clean up SimpleNameSpace with objects and loops and shorten lines
 class BaseAircraft:
     """ Base Aircraft class """

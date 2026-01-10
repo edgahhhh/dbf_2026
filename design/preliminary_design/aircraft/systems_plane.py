@@ -4,12 +4,7 @@
 # import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 from aircraft.base_aircraft import BaseAircraft
-
 # pylint: disable=redefined-outer-name
-
-
-# Temp stuff for testing
-
 
 # aircraft_info={
 #     'wing_info':{   # wing info
@@ -40,8 +35,6 @@ from aircraft.base_aircraft import BaseAircraft
 #     'polar_info':'path/to/drag_polar.yaml',
 #     'empty_mass': 2.286,  # empty mass of the aircraft (no payload + no batts)
 # }
-
-
 # mission_two_info={
 #     'propulsion_info': 'docs/props/new_yaml/apce_21x13_2043.yaml',
 #     'gross_mass': 2.741346,
@@ -49,7 +42,6 @@ from aircraft.base_aircraft import BaseAircraft
 #     'ducks': 3,
 #     'pucks': 1,
 # }
-
 # mission_three_info={
 #     'propulsion_info': 'docs/props/new_yaml/apce_21x13_2043.yaml',
 #     'gross_mass':3.70024,
@@ -77,10 +69,7 @@ class Aircraft(BaseAircraft):
             mission2_info=mission2_info,
             mission3_info=mission3_info,
             altitude=altitude)
-            
-        print()
 
-        
     def _mission_two_performance(self):
         """ calculate mission two performance """
         # The overall goal I THINK is to find the optimal cruise speed for mission two
@@ -98,7 +87,7 @@ class Aircraft(BaseAircraft):
         energy_total = (self._m2_E_laps+self._m2_takeoff[5]+self._m2_climb[5])/0.75
         time_total = self._m2_t_laps + self._m2_takeoff[6] + self._m2_climb[6]
         return energy_total, time_total
-    
+
     def _mission_three_performance(self):
         """ calculate mission three performance """
         self.m3_cruise_speed=self.minimum_speed(
@@ -122,7 +111,6 @@ class Aircraft(BaseAircraft):
         time_total = self._m3_t_laps + self._m3_takeoff[6] + self._m3_climb[6]
         return energy_total, time_total, alpha_m3
 
-    
     def drag_buildup(self):
         """ drag buildup 
         graphs for each config and what are the cd's, bar graphs? """
@@ -202,10 +190,6 @@ class Aircraft(BaseAircraft):
 
         f.suptitle('Drag Buildup')
 
-
-
     def calculate_performance(self,):
         """ this should calculate performance of the aircraft in all missions"""
         return None
-    
-
