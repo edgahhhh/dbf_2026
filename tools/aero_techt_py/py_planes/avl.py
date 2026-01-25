@@ -1,12 +1,55 @@
-""" Avl python module 
-cd Avl
-python3 automation/avl.py <PLANE_NAME> <TEMPLATE_PATH>
+# BSD 3-Clause License
+
+# Copyright (c) 2022, PX4 Autopilot for Drones
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# 
+# A few functions based off code found in tools/avl_automation in https://github.com/PX4/PX4-gazebo-models.git
+
+""" Avl python module
+> cd Avl
+> python3 automation/avl.spy <PLANE_NAME> <TEMPLATE_PATH>
+=================
+// external use //
+> from <package>.avl import Avl, Aircraft, external_main
+// build avl and aircraft, set paths if necessary in Avl //
+> aircraft=Aircraft(wing, tail, mass)
+> avl=Avl(aircraft)
+// run main //
+> out=external_main(kwargs)
+// plot out dictionary if needed with matplotlib.pyplot //
 """
 import os
 import sys
 import subprocess
 import warnings
 import time
+from typing import TextIO
+import pandas as pd
 
 # Simple class for the aircraft object in the AVL stuff
 class Aircraft():
@@ -35,6 +78,11 @@ class Avl():
         self._avl_runs_path=avl_run_path
         # get path of the aircraft file
         self._file=os.path.join(self._avl_path, avl_run_path, name+'.avl')
+
+    @property
+    def name(self):
+        """ get name """
+        return self._name
 
     def _write_surface(self, name, nspan, sspace, dainc, ydup=None):
         """ write surface """
@@ -195,7 +243,8 @@ class Avl():
         self._generate_steps(
             template_path, steps_path, self._name)
 
-        exe_file=os.path.join(self._avl_path, 'avl')
+        # exe_file=os.path.join(self._avl_path, 'avl')
+        exe_file='./avl'
 
         # subprocess.run(
         #         [str(exe_file)],
@@ -276,6 +325,68 @@ class Avl():
     # frame: xyz=BLU
 # use a dictionary since we can use a yaml for this and we can just generate a ton of yamls
 # use avl/runs/yaml?
+
+
+# aircraft=Aircraft(wing, tail, mass)
+# avl=Avl(name='test_plane', aircraft=aircraft)
+# avl.create_avl_file()
+def get_coef(file: TextIO, coef: str) -> str:
+    """ Get the desired coefficient from the output file
+    Arguments:
+        file: file to read from
+        coef: coefficient to return
+    Returns:
+        value: value associated with coefficient
+    """
+    linesplit = []
+    for line in file:
+        if f' {coef} ' in line:
+            linesplit = line.split()
+            break
+
+    index = 0
+    for i,v in enumerate(linesplit):
+        if v == coef:
+            index = i
+    value = linesplit[index+2]
+    return value
+
+def main(*args):
+    """ thing to run at call 
+    Useful in debugging, defaults to PDR aircraft """
+    aircraft=Aircraft(wing, tail, mass)
+    avl=Avl(args[0], aircraft)
+    avl.create_avl_file()
+    avl.run_avl(args[1])
+
+# TODO: Fix this up and some modularity
+def external_main(avl: Avl, template_path:str,
+                  file_out: TextIO, **coeffs):
+    """ run avl externally (i.e. not in terminal)
+    Arguments:
+        avl: object for associated aircraft (Avl)
+        template_path: path to associated template of steps (path_like)
+        file_out: output file expected from run, if multiple, loop function (TextIO)
+        coeffs: coefficients to return (kwargs)
+    Returns: 
+        out: key value pairs of coefficients given (dictionary)
+    """
+    avl.create_avl_file()
+    avl.run_avl(template_path)
+    # need to write something that parses the stability file and gets coeffs asked for 
+
+    out={}
+    for coef in coeffs:
+        # reset seek
+        file_out.seek(0)
+        value=get_coef(file_out, coef)
+        if value is not None:
+            out[coef] = value
+        else:
+            out[coef] = None
+    # return the dictionary
+    return out
+
 wing={
     'span': 1.524,
     'chord': 0.416,
@@ -306,18 +417,6 @@ mass={  # cog of our plane, well have multiple cases, so we can make case yamls
     'z_ref': 0.0,
 }
 
-# aircraft=Aircraft(wing, tail, mass)
-# avl=Avl(name='test_plane', aircraft=aircraft)
-# avl.create_avl_file()
-
-def main(*args):
-    """ thing to run at call """
-    aircraft=Aircraft(wing, tail, mass)
-    avl=Avl(args[0], aircraft)
-    avl.create_avl_file()
-    avl.run_avl(args[1])
-
-    
-    
 if __name__=="__main__":
+    # debugging stuff
     main(sys.argv[1], sys.argv[2])

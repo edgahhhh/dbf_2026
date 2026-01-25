@@ -1,1 +1,4 @@
 load runs/test_plane
+oper
+x
+st runs/tail_sizing/test_plane_st.txt

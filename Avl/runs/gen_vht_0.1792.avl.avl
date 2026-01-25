@@ -1,5 +1,5 @@
 # AVL File 
-test_plane 
+gen_vht_0.1792.avl 
 0.0                                 | Mach 
 0     0     0.0                     | iYsym  iZsym  Zsym 
   0.634     0.416     1.524   | Sref   Cref   Bref 
@@ -58,19 +58,19 @@ TRANSLATE
 ANGLE 
   -2.000                        | dAinc 
 SECTION                                                     |  (keyword) 
-   1.500    0.000    0.113    0.165   0.000    8    3   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ] 
+   1.500    0.000    0.113    0.229   0.000    8    3   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ] 
 
 AFIL 0.0 1.0 
 naca_0012.dat
 CONTROL 
-elevator  1.0  0.085  0.000  0.000  0.000  -1.0 
+elevator  1.0  0.149  0.000  0.000  0.000  -1.0 
 SECTION                                                     |  (keyword) 
-   1.500    0.273    0.113    0.165   0.000    8    3   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ] 
+   1.500    0.165    0.113    0.229   0.000    8    3   | Xle Yle Zle   Chord Ainc   [ Nspan Sspace ] 
 
 AFIL 0.0 1.0 
 naca_0012.dat
 CONTROL 
-elevator  1.0  0.085  0.000  0.000  0.000  -1.0 
+elevator  1.0  0.149  0.000  0.000  0.000  -1.0 
 SURFACE                      | (keyword) 
 fin 
 #Nchord    Cspace   [ Nspan Sspace ] 

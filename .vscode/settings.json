@@ -14,5 +14,7 @@
         "ydup",
         "yref",
         "zref"
-    ]
-}
+    ],
+    "python.analysis.extraPaths": [
+    "/Users/edgar/Developer/dbf-projects/dbf_2026/tools/aero_techt_py",
+]
