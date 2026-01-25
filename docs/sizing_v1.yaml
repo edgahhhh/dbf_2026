@@ -1,0 +1,40 @@
+# Sizing results, first cut
+# Entered manually
+
+info: 
+  - units: "SI"
+  - description: "First cut sizing results, primarily from conceptual design phase"
+dimensions:
+# Fuselage
+- length_fus: 0.589
+- width_fus: 0.0982
+- length_tail:
+- length_boom:
+# Wing
+- span_wing: 1.524
+- chord_wing: 0.418
+- ar_wing: 3.644
+- CL_max: 0.85
+- CD_min_no_fus: 0.04
+# Tail
+- span_h_tail: 0.522
+- chord_h_tail: 0.148 
+- ar_h_tail: 3.323
+- span_v_tail: 0.215
+- chord_v_tail: 0.148
+- ar_v_tail: 1.460
+
+weight:
+- one: "temp"
+
+targets: 
+# mission 2
+- ducks: 3
+- pucks: 1
+- laps_m2: 5
+- V_cruise_m2: 16.6
+- n_m2: 1.7589
+# mission 3
+- length_banner: 8.3
+- V_cruise_m3: 16.59
+- n_m3: 1.1499
