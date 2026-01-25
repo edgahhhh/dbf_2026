@@ -63,7 +63,11 @@ class Aircraft():
 # want a function that we give some general aircraft dimensions and a ref point
 # and we get a file into our Avl/runs, for now just run from /Avl
 class Avl():
-    """  """
+    """ Avl class used for each aircraft/avl run instance
+    
+    Description:
+        Creates an avl file from given Aircraft object and allows for a template of steps
+        to run the case and output the file desired, which can be parsed through."""
     def __init__(self, name:str,  aircraft:Aircraft, avl_path=None, avl_run_path='runs'):
         """ create avl wrapper object 
         Arguments:
@@ -246,11 +250,6 @@ class Avl():
         # exe_file=os.path.join(self._avl_path, 'avl')
         exe_file='./avl'
 
-        # subprocess.run(
-        #         [str(exe_file)],
-        #         cwd=self._avl_path,
-        # )
-
         with open(f'{steps_path}', 'r') as file:
             steps=[step.strip() for step in file if step.strip()]
             # steps=file.readlines()
@@ -279,16 +278,6 @@ class Avl():
         proc.wait()
         print(f'STDOUT: {stdout}')
         print(f'STDERR: {stderr}')
-
-        # print(f'outputs \n------- \n {[stdout, stderr]}')
-
-            # subprocess.run(
-            #     [str(exe_file)],
-            #     cwd=self._avl_path,
-            #     stdin=steps,
-            #     text=True,
-            #     check=True
-            # )
 
     @staticmethod
     def _generate_steps(template_path, output_path, plane_name):
@@ -330,7 +319,7 @@ class Avl():
 # aircraft=Aircraft(wing, tail, mass)
 # avl=Avl(name='test_plane', aircraft=aircraft)
 # avl.create_avl_file()
-def get_coef(file: TextIO, coef: str) -> str:
+def get_coef(file: TextIO, coef: str) -> float:
     """ Get the desired coefficient from the output file
     Arguments:
         file: file to read from
@@ -349,7 +338,7 @@ def get_coef(file: TextIO, coef: str) -> str:
         if v == coef:
             index = i
     value = linesplit[index+2]
-    return value
+    return float(value)
 
 def main(*args):
     """ thing to run at call 
