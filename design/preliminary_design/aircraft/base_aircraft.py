@@ -88,7 +88,8 @@ class Dynamics:
         |  [                +
         | [
         |+
-        |------------------------> alpha"""
+        |------------------------> alpha
+    """
     def __init__(self,
                 ref_area,
                 aspect_ratio,

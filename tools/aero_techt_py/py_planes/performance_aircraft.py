@@ -3,7 +3,7 @@
 # import numpy as np
 # import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
-from py_planes.base_aircraft import BaseAircraft
+from py_planes.aircraft import Aircraft
 # pylint: disable=redefined-outer-name
 
 # aircraft_info={
@@ -51,8 +51,8 @@ from py_planes.base_aircraft import BaseAircraft
 #     'banner_length': 1.9,
 # }
 
-class Aircraft(BaseAircraft):
-    """ Aircraft class for preliminary design use """
+class PerformanceAircraft(Aircraft):
+    """ Aircraft class for detailed design use """
     def __init__(self,
                 aircraft_info,
                 mission2_info,
@@ -90,14 +90,33 @@ class Aircraft(BaseAircraft):
 
     def _mission_three_performance(self):
         """ calculate mission three performance """
+        # find the minimum speed for mission three, this will be the cruise speed
         self.m3_cruise_speed=self.minimum_speed(
             mass=self.m3_gross_mass
         )
-        print(self.m3_cruise_speed)
+        # print(self.m3_cruise_speed)
+
+        # calculate the take off performance
+        # This is just a single tuple for now
         self._m3_takeoff=self.take_off_performance(
             mass=self.m3_gross_mass, banner=True, stowed=True)
-        self._m3_climb=self.climb_performance(
-            mass=self.m3_gross_mass, banner=True, stowed=True)
+        
+        # calculate the climb performance
+        climb_perf, climb_power, climb_energy, prop_perf = self.climb_performance(
+            self.m3_gross_mass, self.m3_prop, banner=True, stowed=True)
+        self._m3_climb_performance = climb_perf
+        self._m3_climb_power = climb_power
+        self._m3_climb_energy = climb_energy
+        self._m3_climb_prop_perf = prop_perf
+
+        self._m3_laps_perf, self._m3_turn_prop_perf = self.lap_performance(
+            laps=4,
+            mass=self.m3_post_gross_mass,
+            v_cruise=self.m3_cruise_speed,
+            bank_turn=0.5163,
+            banner=True,
+            propeller=self.m3_prop
+        )
         self._m3_E_laps, self._m3_t_laps, cl_cruise =  self.lap_performance(
             laps=4,
             mass=self.m3_post_gross_mass,
@@ -109,6 +128,11 @@ class Aircraft(BaseAircraft):
         alpha_m3 = self.dynamics._aoa_from_cl_interp(cl_cruise)
         energy_total =(self._m3_E_laps+self._m3_takeoff[5]+self._m3_climb[5])/0.8
         time_total = self._m3_t_laps + self._m3_takeoff[6] + self._m3_climb[6]
+
+        # get the maximum drag for this mission
+        # assume its from banner towing just for fun
+        # or we can return
+        # drag: [t/o, climb, cruise, turn, land]
         return energy_total, time_total, alpha_m3
 
     def drag_buildup(self):
@@ -190,6 +214,31 @@ class Aircraft(BaseAircraft):
 
         f.suptitle('Drag Buildup')
 
+        # create another figure that shows drag numbers for each mission
+        self._
+
     def calculate_performance(self,):
         """ this should calculate performance of the aircraft in all missions"""
         return None
+
+
+def plt_3d(x,y,z,title,xlabel,ylabel,zlabel,
+           c=None, clabel=None):
+    """ plot 3d points """
+    plt.figure()
+    ax=plt.gcf().add_subplot(111,projection='3d')
+    ax.set_title(title)
+    if c is None:
+        sc=ax.scatter(x,y,z)
+    else:
+        sc=ax.scatter(x,y,z,c=c,cmap='magma')
+        cb=plt.gcf().colorbar(sc, ax=ax, pad=0.1)
+        if clabel is None:
+            # set to zlabel if not given
+            cb.set_label(zlabel)
+        else:
+            cb.set_label(clabel)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_zlabel(zlabel)
+    return sc

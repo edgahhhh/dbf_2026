@@ -139,7 +139,7 @@ class Avl():
                 case 'elevator':
                     with open(f'{self._file}','a') as avl_file:
                         avl_file.write("CONTROL \n")
-                        avl_file.write(f"elevator  1.0  {xhinge:.3f}  0.000  0.000  0.000  -1.0 \n")
+                        avl_file.write(f"elevator  1.0  {xhinge:.3f}  0.000  1.000  0.000  1.0 \n")
                         avl_file.close()
                 # rudder control surface
                 case 'rudder':
@@ -264,10 +264,10 @@ class Avl():
         )
 
         for step in steps:
-            print(f'>>>$ {step}')
+            # print(f'>>>$ {step}')
             proc.stdin.write(step + '\n')
             proc.stdin.flush()
-            time.sleep(0.05)    # little pause to process stuff
+            # time.sleep(0.05)    # little pause to process stuff
         
         # close the communicator
         proc.stdin.close()
@@ -276,8 +276,8 @@ class Avl():
         stdout=proc.stdout.read()
         stderr=proc.stderr.read()
         proc.wait()
-        print(f'STDOUT: {stdout}')
-        print(f'STDERR: {stderr}')
+        # print(f'STDOUT: {stdout}')
+        # print(f'STDERR: {stderr}')
 
     @staticmethod
     def _generate_steps(template_path, output_path, plane_name):

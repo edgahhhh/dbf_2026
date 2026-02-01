@@ -4,15 +4,43 @@
     
     TODO: #3 this aircraft isn't very general, so make general at some point
  """
+from typing import Optional, Tuple, NamedTuple
 import numpy as np
 import matplotlib.pyplot as plt
 import yaml
+import warnings
 from scipy.interpolate import interp1d
 from types import SimpleNamespace   # because im too lazy to make more objects
-from py_planes.propeller import Propeller
+from py_planes.propeller import Propeller, PropellerAnalysis
 # from propeller_analysis import PropellerAnalysis
 #pylint: disable=redefined-outer-name
 #pylint: disable=line-too-long
+
+class Performance(NamedTuple):
+    """ Performance named tuple class """
+    cl: float
+    cd: float
+    lift: float
+    drag: float
+    airspeed: float
+
+class Power(NamedTuple):
+    """ Power named tuple class"""
+    power_aero: float
+    power_propeller: float
+    power_motor: float
+    power_battery: float
+
+class Energy(NamedTuple):
+    """ Energy named tuple class """
+    energy_aero: float
+    energy_propeller: float
+    energy_motor: float
+    energy_battery: float
+
+class MissionPerformance(NamedTuple):
+    """ Mission performance class """
+    nothing: float
 
 class Banner:
     """ Banner class for use in analyzing the banner in flight """
@@ -286,7 +314,7 @@ class Dynamics:
         return cd
 
 # TODO: clean up SimpleNameSpace with objects and loops and shorten lines
-class BaseAircraft:
+class Aircraft:
     """ Base Aircraft class """
     def __init__(self,
                 aircraft_info:dict,
@@ -410,9 +438,9 @@ class BaseAircraft:
         return v_lof
     
     def climb_speed(self, mass):
-        """ calculate climb speed for some mass """
-        v_v=1.2*np.sqrt(2*mass*9.81/self.rho/self.ref_area/self.dynamics.cl_max)
-        return v_v
+        """ calculate climb speed for some mass, assuming v2=1.2*v0  """
+        v_2=1.2*np.sqrt(2*mass*9.81/self.rho/self.ref_area/self.dynamics.cl_max)
+        return v_2
 
     def minimum_speed(self, mass):
         """ find the minimum cruise speed for config 
@@ -437,8 +465,17 @@ class BaseAircraft:
         return (v_lof/acceleration)  # seconds
     
     def take_off_performance(self,mass,sg=17.5,banner=False,stowed=False):
-        """ estimate the performance at takeoff 
-        return: {cl,cd,L,D,Pbatt,Ebatt,time}
+        """
+        estimate the performance at takeoff
+
+        Arguments:
+            mass of plane, kg (float)
+            ground run, m (float)
+            is banner attached (Bool)
+            is banner stowed (Bool)
+
+        Returns:
+            performance: [cl, cd, L, D, Pbatt, Ebatt, time]
         """
         # assume roll at 0 degrees
         # Find how much power is needed for lift off
@@ -459,15 +496,33 @@ class BaseAircraft:
             v_lof=self.takeoff_speed(mass=mass), sg=sg
         )
         energy_batt=power_batt*t_tof/3600
-        return [cl,cd,lift,drag,power_batt,energy_batt,t_tof]
+        performance=Performance(cl=cl, cd=cd, lift=lift, drag=drag, airspeed=v)
+        return Performance, [cl,cd,lift,drag,power_batt,energy_batt,t_tof]
     
     @staticmethod
     def calculate_time_to_climb(climb_rate, cruise_alt=20):
         """ calculate time to finish climb sequence """
         return (cruise_alt / climb_rate)
     
-    def climb_performance(self,mass,banner=False,stowed=False):
-        # return: {cl,cd,L,D,Pbatt,Ebatt,time}
+    def climb_performance(self,mass, propeller:Propeller, motor_eff=0.9,
+                          banner=False,stowed=False
+                          ) -> Tuple[Performance, Power, Energy, Optional[PropellerAnalysis]]:
+        """ 
+        calculate the climb performance 
+
+        Arguments:
+            mass: mass of plane, kg (float)
+            propeller: propeller for plane (Propeller)
+            motor_eff: 0-1, value of motor efficiency (float)
+            banner: is there a banner (Bool)
+            stowed: is the banner stowed (Bool)
+
+        Returns:
+            climb_performance: [cL, cD, L, D, V_inf]
+            climb_power: [P_batt, P_motor, P_propeller, P_aero]
+            climb_energy: [E_batt, E_motor, E_propeller, E_aero]
+            propeller_performance: [thrust, P_propeller, eta, omega]
+        """
         weight=mass*9.81
         v_climb=self.climb_speed(mass=mass)
         cl=weight/(1/2*self.rho*v_climb**(2)*self.ref_area)
@@ -477,23 +532,58 @@ class BaseAircraft:
         lift, drag=self.dynamics.calculate_dynamics(
             airspeed=v_climb,cl=cl,cd=cd
         )
-        # excess_power=total_avail_power-drag*v_climb
-        # v_v=excess_power/weight
-        v_v=3   # m/s, shortcut and easy assumption
-        power_batt=0.0
-        t_climb=5
-        energy_climb=1
-        return [cl,cd,lift,drag,power_batt,energy_climb,t_climb]
+        climb_performance = Performance(cl, cd, lift, drag, v_climb)
+        # climb_performance=[cl, cd, lift, drag, v_climb]
+
+        # Get powers for aircraft
+        thrust=drag
+        power_aero=thrust*v_climb
+        prop_analysis=propeller.analysis(v_climb, drag)
+        if prop_analysis is not None:
+            power_propeller=prop_analysis.power
+        else:
+            warnings.warn(
+                'propeller solution did not converge'
+                'estimating 40% propeller efficiency'
+                , UserWarning, stacklevel=2)
+            power_propeller=power_aero/0.4
+        # find the motor power
+        power_motor=power_propeller/motor_eff
+        # TODO: #10 solve for battery power using esr
+        power_batt=power_motor
+        climb_power=Power(power_aero=power_aero, power_battery=power_batt, 
+                          power_motor=power_motor, power_propeller=power_propeller)
+        # TODO: #11 solve for time needed to climb (this is small so ignore for now)
+        # scale power list by time for energy
+        climb_energy=Energy()
+        return climb_performance, climb_power, climb_energy, prop_analysis
     
     def lap_performance(self,
                         laps,
                         mass,
                         v_cruise,
                         bank_turn, 
-                        banner=False):
-        """ estimate the performance for a lap
-            @return energy_total
-            @return t_total
+                        propeller: Propeller,
+                        banner=False) -> Tuple[list, Optional[PropellerAnalysis]]:
+        """
+        estimate the performance for a lap
+
+        Arguments:
+            laps to complete (int)
+            mass of aircraft, kg (float)
+            cruising speed, m/s (float)
+            bank angle during turn, deg? (float)
+            is banner attached? (Bool) 
+
+        Returns:
+            energy_total
+            t_total
+            cl
+            cd cruise
+            cd turn
+            drag cruise
+            drag turn
+            propeller_turn
         """
         n=1/np.cos(bank_turn)
         weight=mass*9.81
@@ -533,8 +623,13 @@ class BaseAircraft:
         energy_total_turning=energy_turn_ea*laps*2 + energy_circle_ea*laps
         energy_total=energy_straight_ea + 2*energy_straight_ea*(laps-1) + energy_total_turning
         energy_total=energy_total/3600
-    
-        return energy_total, t_total, cl_cruise
+        
+        prop_perf = propeller.analysis(airspeed=v_cruise, drag=drag_turn)
+        if prop_perf is None:
+            warnings.warn('propeller did not converge', UserWarning, stacklevel=2)
+        
+        laps_performance = [energy_total, t_total, cl_cruise, cd_cruise, drag_cruise, drag_turn]
+        return laps_performance , prop_perf
 
 # Local functions for all objects?
 def density_from_alt(height_asl):
