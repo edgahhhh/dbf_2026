@@ -1,5 +1,0 @@
-load runs/gen_vht_1.4458.avl
-oper
-x
-st runs/tail_sizing/gen_vht_1.4458.avl_st.txt
-quit
