@@ -1,5 +1,0 @@
-load runs/PLANE
-oper
-x
-st runs/tail_sizing/PLANE_st.txt
-quit

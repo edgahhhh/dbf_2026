@@ -68,13 +68,13 @@ class Avl():
     Description:
         Creates an avl file from given Aircraft object and allows for a template of steps
         to run the case and output the file desired, which can be parsed through."""
-    def __init__(self, name:str,  aircraft:Aircraft, avl_path=None, avl_run_path='runs'):
+    def __init__(self, name:str,  aircraft:Aircraft, avl_path='Avl', avl_run_path='runs'):
         """ create avl wrapper object 
         Arguments:
             name: name of aircraft associated w/ instance (str)
             aircraft: aircraft object (Aircraft)
-            avl_path: path to avl root, /Avl (path_like)
-            avl_run_path: path to case runs, /runs (path_like)
+            avl_path: path to avl root, Avl/ (path_like)
+            avl_run_path: path to case runs, runs/ (path_like)
         """
         self._name=name
         self._aircraft=aircraft
@@ -243,7 +243,7 @@ class Avl():
         # TODO: #4 change the automatic name to sort of math the template name
         # TODO: #5 use a cleaner place holder in place PLANES in the template 
         # TODO: #6 account for different avl paths (rn we're running from /Avl so we dont care)
-        steps_path=f'automation/{self._name}_steps.txt'
+        steps_path=f'{self._avl_path}/automation/{self._name}_steps.txt'
         self._generate_steps(
             template_path, steps_path, self._name)
 
